@@ -48,8 +48,13 @@ export class HttpHandler {
         return;
       }
 
+      const hostParts = hostHeader.split(':');
+      const hostname = hostParts[0];
+      const port = hostParts[1] ? parseInt(hostParts[1], 10) : 80;
+
       const opts: http.RequestOptions = {
-        host:    hostHeader,
+        hostname,
+        port,
         path:    req.url,
         method:  req.method,
         headers: req.headers,
