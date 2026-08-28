@@ -54,7 +54,7 @@ We enforce strict coding principles to ensure the codebase remains clean, extens
 3. **Liskov Substitution (LSP)**: All implementations must be completely swappable with their interface.
 4. **Interface Segregation (ISP)**: Keep interfaces small and specific.
 5. **Dependency Inversion (DIP)**: Always depend on abstractions (ports), never on concrete classes.
-6. **No AI-Slop Console Prints**: No emojis, no duplicate horizontal rule lines, standard plaintext tag formats only.
+6. **Minimalist CLI Output**: Avoid emojis, redundant horizontal rule separators, and custom block shapes. Follow the standard bracket-prefixed plaintext tags for consistency.
 
 ---
 

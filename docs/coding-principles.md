@@ -60,7 +60,7 @@ To keep the codebase from decomposing into large files, we enforce strict limits
 
 ## 3. Print Formatting Standards
 
-To maintain a professional, minimalist, and standardized CLI output, do not add "AI slop" or cheap styling to the logs:
+To maintain a professional, minimalist, and standardized CLI output, follow these print formatting rules:
 
 - **No Emojis**: Never use icons or emojis (such as `📤`, `🔴`, `🚨`, `✅`, `⚠`) in console logs. Use clean prefix labels instead: `[envtrap]`, `[envtrap] warning:`, `[envtrap] info:`.
 - **No Horizontal Rule Dividers**: Never print horizontal rule dividing lines (e.g. `───────` or `═══════`). These clutter the console and make text parsing difficult. Use native standard output formatting and standard list structures instead.

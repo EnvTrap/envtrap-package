@@ -1,8 +1,5 @@
 # envtrap
 
-> [!IMPORTANT]
-> **Repository Discontinued**: This repository has been discontinued and migrated to the **EnvTrap** organization at **[https://github.com/EnvTrap](https://github.com/EnvTrap)**, where the package now lives in its own dedicated repository.
-
 A zero-configuration runtime secret leak detector and egress firewall for Node.js.
 
 `envtrap` wraps your Node.js application and intercepts every outbound channel in real time — before secrets, credentials, or sensitive environment variables can be exfiltrated by malicious code, compromised packages, or insider threats.
@@ -33,7 +30,7 @@ If you want to understand how the codebase works, how modules are intercepted, o
 - **DNS Interception** (`dns` channel, default: `block`): Detects secrets encoded inside DNS hostname queries and blocks resolver calls for both callback and promise-based APIs.
 - **High-Entropy Tunneling Detection**: Identifies potential base64/hex DNS tunneling using Shannon-entropy analysis on each subdomain label.
 - **Real-Time Secret Synchronization**: Dynamically-rotated or injected credentials are automatically detected and synced instantly — no restart needed.
-- **AI-Safe Redaction**: Raw credential values are never printed. Only their SHA-256 hash prefix is shown in terminal output and reports.
+- **Secure Hash-Based Redaction**: Raw credential values are never printed. Only their SHA-256 hash prefix is shown in terminal output and reports.
 
 ---
 
