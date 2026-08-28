@@ -14,6 +14,7 @@
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "start": "node dist/cli/index.js",
+    "test": "node --test test/unit/*.test.js",
     "postinstall": ""
   },
   "keywords": ["security", "secrets", "env", "leak", "detector", "nodejs"],

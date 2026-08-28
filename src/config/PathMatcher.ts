@@ -33,7 +33,7 @@ export function isPathExcluded(filePath: string, patterns: string[]): boolean {
     );
     const regex = new RegExp('^' + regexParts.join('.*') + '$');
 
-    if (regex.test(normalized)) return true;
+    if (regex.test(normalized) || regex.test('/' + normalized)) return true;
   }
 
   return false;
