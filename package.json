@@ -1,0 +1,36 @@
+{
+  "name": "envtrap",
+  "version": "2.1.1",
+  "description": "Zero-Configuration Runtime Secret Leak Detector for Node.js 18+",
+  "main": "dist/cli/index.js",
+  "bin": {
+    "envtrap": "dist/cli/index.js"
+  },
+  "files": [
+    "dist/"
+  ],
+  "scripts": {
+    "build": "tsc && mkdir -p dist/hooks/virtual && cp src/hooks/hooks.mjs dist/hooks/hooks.mjs && cp src/hooks/shared.mjs dist/hooks/shared.mjs && cp src/hooks/virtual/child-process.mjs dist/hooks/virtual/child-process.mjs && cp src/hooks/virtual/dns.mjs dist/hooks/virtual/dns.mjs && cp src/hooks/hooks.mjs dist/hooks.mjs",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/cli/index.js",
+    "postinstall": ""
+  },
+  "keywords": ["security", "secrets", "env", "leak", "detector", "nodejs"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "4.1.2",
+    "commander": "11.1.0",
+    "dotenv": "16.3.1",
+    "node-forge": "1.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/node-forge": "^1.3.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
