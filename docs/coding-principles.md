@@ -1,59 +1,63 @@
-# SOLID Coding Principles & Standards
+# Software Design & Architecture Principles
 
-We enforce strict coding principles to ensure the codebase remains maintainable, testable, and robust. This document outlines the standards developers must follow.
-
----
-
-## 1. SOLID Application in envtrap
-
-### Single Responsibility Principle (SRP)
-Every class must have exactly **one reason to change**.
-- **Violation**: The old `Scanner` used to contain secrets arrays, configure settings, deduplicate leaks, format strings, print alerts, and check subprocesses.
-- **Enforcement**: We broke `Scanner` into single-concern classes:
-  - `DedupCache`: Deduplicates (name, channel) pairs using a TTL.
-  - `ContentClamp`: Limits scanned data sizes.
-  - `SecretMatcher`: Matches substrings.
-  - `FileEventLogger` & `LeakAlertPrinter`: Separate logging destinations.
-
-### Open/Closed Principle (OCP)
-The system should be **open for extension, but closed for modification**.
-- **Enforcement**: To add a new source of secrets, you do not modify the CLI execution or the loaders. Instead, you implement `ISecretSource` (e.g. `VaultSecretSource`) and add it to the constructor array of `SecretSourceComposer`. The core engine remains untouched.
-
-### Liskov Substitution Principle (LSP)
-Subtypes must be completely **substitutable for their base types**.
-- **Enforcement**: The `CompositeReporter` uses the `ILeakReporter` interface. Any class implementing `ILeakReporter` (e.g. `LeakAlertPrinter`, `FileEventLogger`) can be added to the composite without breaking the runtime behavior or requiring conditional logic.
-
-### Interface Segregation Principle (ISP)
-Clients should **not be forced to depend on interfaces they do not use**.
-- **Enforcement**: Rather than having a large `IReporter` interface that forces every listener to implement `.summary()`, `.banner()`, and `.warn()`, we split it:
-  - `ILeakReporter`: Used for logging a single event (`.report()`).
-  - `IRunSummaryPrinter`: Used only at process shutdown to display the summary.
-  - `BannerPrinter`: Prints CLI startup messages.
-
-### Dependency Inversion Principle (DIP)
-Depend upon **abstractions (interfaces), not concretions (classes)**.
-- **Enforcement**: The `Scanner` does not instantiate or import `LeakAlertPrinter`. Instead, its constructor accepts `IReporter`. This means we can instantiate `Scanner` with a mock reporter during unit testing, isolating it from standard output streams.
+To ensure `envtrap` remains highly testable, modular, and maintainable as an open-source project, all contributions must adhere to clean-code architectural patterns.
 
 ---
 
-## 2. Code Rules & Limits
+## 1. Clean Architecture & Layering
 
-To keep the codebase from decomposing into large files, we enforce strict limits:
+The codebase is split into three core layers with distinct boundaries and strict dependency rules:
 
-### Class Size
-- A class must **not exceed 100 lines of code** (including comments). If a class starts growing, extract private sub-methods into a new collaborator class.
-- A class must have **no more than 2 instance variables** (meaningful collaborator fields). This ensures that classes remain highly cohesive.
+1. **Domain Layer (`src/domain/`)**: 
+   - Contains pure business logic and rule sets (such as `SecretMatcher`, `DedupCache`, and `OutputRedactor`).
+   - Must remain entirely stateless and free of side-effects. It does not access the network, file system, or operating system interfaces.
+   
+2. **Ports Layer (`src/ports/`)**:
+   - Outlines the core abstractions and interfaces (`IScanner`, `IReporter`, `ISecretSource`).
+   - Acts as the contract between the domain logic and the external runtime adapters.
 
-### Method Length
-- No method should **exceed 10 lines of executable code**.
-- Break complex methods down into private helpers, or extract the logic into a new pure domain class.
+3. **Adapters Layer (`src/mitm/`, `src/secrets/`, `src/reporting/`, `src/cli/`)**:
+   - Implements the interfaces defined in the Ports layer.
+   - Interacts with Node.js runtime APIs, handles network sockets, executes operating system commands, and parses system configurations.
 
-### Parameter Limitations
-- Constructors and methods should accept **no more than 3 parameters**.
-- If a method requires more, pass a structured parameter object or refactor the method into smaller sub-responsibilities.
+### The Dependency Rule
+Dependencies must point inward. Adapters depend on Ports and Domain. The Domain layer must never import or depend on anything in the Adapters layer. This ensures that the core scanning logic is completely isolated from Node.js environment changes.
 
-### State Isolation
-- **No global states or module-level mutable variables**.
-- Every service (like `CertificateAuthority` or the scanner engine) must keep its state contained inside class instances. This allows independent tests to run concurrently without side-effects or state leaks.
+---
 
+## 2. SOLID Architectural Design
 
+### Single Responsibility (SRP)
+Every class must represent a single, focused responsibility. Large components must be broken down into cohesive collaborators. For example, instead of the core engine coordinating caching, redaction, and stream parsing in one place, these concerns are delegated:
+- `DedupCache` handles temporary duplicate suppression.
+- `ContentClamp` manages memory buffers.
+- `OutputRedactor` executes fingerprinting and string replacements.
+
+### Open/Closed (OCP)
+The framework is designed to allow extensions without modifying existing code. For instance:
+- **Secret Sources**: To load credentials from a new API key manager, implement the `ISecretSource` interface. The `SecretSourceComposer` accepts any list of sources, keeping the loader process closed to modification.
+- **Reporting**: Custom alert handlers are integrated by implementing the `ILeakReporter` interface and registering them with `CompositeReporter`.
+
+### Liskov Substitution (LSP)
+All interface implementations must be fully substitutable. Callers interacting with `ILeakReporter` or `IScanner` must be able to use any subtype interchangeably without checking constructors or handling unexpected exceptions.
+
+### Interface Segregation (ISP)
+Interfaces must remain highly cohesive and minimal. Instead of a monolithic reporter contract, interfaces are segregated by operational context:
+- `ILeakReporter` maps to immediate event alerts.
+- `RunSummaryPrinter` maps to exit summary output.
+- `BannerPrinter` maps to initialization output.
+
+### Dependency Inversion (DIP)
+High-level controllers (such as the CLI runner and MITM proxy server) do not depend on concrete implementations of the scanner or logger. They interact solely through interfaces (`IScanner`, `IReporter`). Concretions are bound during bootstrap inside the `RunCommandBuilder` composition root.
+
+---
+
+## 3. Concurrency, State Isolation, and Testability
+
+### Eliminating Global Mutability
+To ensure thread safety and support parallel test execution:
+- **No Global Singleton Instances**: Class instances must be instantiated explicitly. Do not export mutable module-level variables.
+- **Encapsulated State**: Operational state (such as certificate pools or event caches) must be encapsulated entirely within class instances.
+
+### Designing for Testability
+Every external side-effect (I/O, network requests, time calculations) must be abstractable. If a component interacts with the file system or standard streams, those boundaries must be injected via constructors to allow standard unit tests to inject mocks and run in isolation.
