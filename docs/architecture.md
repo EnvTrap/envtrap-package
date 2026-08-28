@@ -76,9 +76,9 @@ src/
 ├── reporting/                  # Output & Event Logging (Adapters)
 │   ├── ILeakReporter.ts        # Base interface for individual log outputs
 │   ├── CompositeReporter.ts    # Multi-reporter dispatcher
-│   ├── LeakAlertPrinter.ts     # Clean, emoji-free stdout printer
+│   ├── LeakAlertPrinter.ts     # Console stdout leak printer
 │   ├── RunSummaryPrinter.ts    # Grouped exit leak summary compiler
-│   ├── BannerPrinter.ts        # Minimalist startup text printer
+│   ├── BannerPrinter.ts        # Startup banner printer
 │   ├── FileEventLogger.ts      # Structured JSONL logging
 │   └── ReportWriter.ts         # End-of-run JSON report writer
 │

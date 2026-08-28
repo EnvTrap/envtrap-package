@@ -39,7 +39,7 @@ This package is built with TypeScript and managed with `pnpm`. You will need Nod
 - `src/domain/` — Pure logic models and helper objects (matcher, redactor, dedup).
 - `src/config/` — Configuration schemas, mergers, and validator classes.
 - `src/secrets/` — Environment and file secret loaders.
-- `src/reporting/` — Emojiless, plain-text printers and structured file loggers.
+- `src/reporting/` — Standard console stdout printers and structured file loggers.
 - `src/mitm/` — HTTPS CA generator and loopback proxy servers.
 - `src/cli/` — CLI subcommands and child process orchestrators.
 - `src/hooks/` — ESM custom customization loaders and CJS require wrappers.
@@ -54,7 +54,6 @@ We enforce strict coding principles to ensure the codebase remains clean, extens
 3. **Liskov Substitution (LSP)**: All implementations must be completely swappable with their interface.
 4. **Interface Segregation (ISP)**: Keep interfaces small and specific.
 5. **Dependency Inversion (DIP)**: Always depend on abstractions (ports), never on concrete classes.
-6. **Minimalist CLI Output**: Avoid emojis, redundant horizontal rule separators, and custom block shapes. Follow the standard bracket-prefixed plaintext tags for consistency.
 
 ---
 

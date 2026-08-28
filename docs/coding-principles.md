@@ -56,13 +56,4 @@ To keep the codebase from decomposing into large files, we enforce strict limits
 - **No global states or module-level mutable variables**.
 - Every service (like `CertificateAuthority` or the scanner engine) must keep its state contained inside class instances. This allows independent tests to run concurrently without side-effects or state leaks.
 
----
 
-## 3. Print Formatting Standards
-
-To maintain a professional, minimalist, and standardized CLI output, follow these print formatting rules:
-
-- **No Emojis**: Never use icons or emojis (such as `📤`, `🔴`, `🚨`, `✅`, `⚠`) in console logs. Use clean prefix labels instead: `[envtrap]`, `[envtrap] warning:`, `[envtrap] info:`.
-- **No Horizontal Rule Dividers**: Never print horizontal rule dividing lines (e.g. `───────` or `═══════`). These clutter the console and make text parsing difficult. Use native standard output formatting and standard list structures instead.
-- **Simple Lists**: Group summaries using standard ASCII markers: `->` for bullet points.
-- **ANSI Colors**: Use colors (via `chalk`) selectively. Use `chalk.red.bold` for secret leaks, `chalk.gray` for timestamps/secondary metadata, and standard colored labels for different channels to help developers quickly spot leaks.
