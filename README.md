@@ -14,7 +14,7 @@ If you want to understand how the codebase works, how modules are intercepted, o
 
 - **[System Architecture](docs/architecture.md)**: High-level design, directory structure layout map, and component responsibilities.
 - **[Interception Flow & Runtime Hooks](docs/interception-flow.md)**: ESM loaders, CommonJS require patching, parent-child communication line protocol, and TLS proxy decryption.
-- **[SOLID Coding Principles & Standards](docs/coding-principles.md)**: How SOLID is applied, class size and method length constraints, state isolation, and print formatting rules.
+- **[SOLID Coding Principles & Standards](docs/coding-principles.md)**: Details on Clean Architecture boundaries, SOLID design patterns, stateless execution, and testability design guidelines.
 - **[Extending envtrap](docs/extending-envtrap.md)**: Step-by-step guides to add a new scan channel, create custom secret loaders, write custom reporters, and add integration tests.
 - **[Contributing Guidelines](CONTRIBUTING.md)**: Setup instructions, local testing, build compilation, and PR rules.
 - **[Security Policy](SECURITY.md)**: Supported versions and disclosure rules.
@@ -22,15 +22,15 @@ If you want to understand how the codebase works, how modules are intercepted, o
 
 ---
 
-## Features
+## Interception Channels
 
-- **HTTPS/HTTP MITM Proxy** (`network` channel, default: `block`): Intercepts outbound traffic, decrypts payloads, and scans request headers, URLs, and bodies for secrets. Local loopback traffic is automatically bypassed via `NO_PROXY`.
-- **stdout / stderr Stream Scanning** (`stdout`/`stderr` channels, default: `warn`): Pipes process output streams to scan, redact, and optionally kill execution on leaks.
-- **Child Process Env Validation** (`child_process` channel, default: `warn`): Intercepts `spawn`, `exec`, `execFile`, `fork`, and all sync variants to inspect `options.env` for secrets before any OS fork.
-- **DNS Interception** (`dns` channel, default: `block`): Detects secrets encoded inside DNS hostname queries and blocks resolver calls for both callback and promise-based APIs.
-- **High-Entropy Tunneling Detection**: Identifies potential base64/hex DNS tunneling using Shannon-entropy analysis on each subdomain label.
-- **Real-Time Secret Synchronization**: Dynamically-rotated or injected credentials are automatically detected and synced instantly — no restart needed.
-- **Secure Hash-Based Redaction**: Raw credential values are never printed. Only their SHA-256 hash prefix is shown in terminal output and reports.
+`envtrap` intercepts leaks across five distinct runtime vectors:
+
+* **HTTPS/HTTP MITM Proxy** (`network` channel): Routes outbound TCP connections through an ephemeral, in-memory loopback proxy. Intercepts request headers, URLs, and payloads, verifying them before forwarding. Ephemeral TLS certificates are generated on-the-fly and trusted by injecting a temporary Root CA into `NODE_EXTRA_CA_CERTS`.
+* **Standard Output Scanning** (`stdout` / `stderr` channels): Hooks standard output streams to search for registered credentials. Matches are redacted using a secure SHA-256 fingerprint placeholder.
+* **Subprocess Environment Check** (`child_process` channel): Hooks Node.js process creation modules (`child_process.spawn`, `exec`, `fork`, and their synchronous equivalents) at the binding layer to prevent sensitive credentials from being inherited by child processes.
+* **DNS Resolution Auditing** (`dns` channel): Hooks the core `node:dns` module to detect secrets encoded directly inside hostname resolution queries.
+* **High-Entropy Label Detection**: Uses Shannon entropy analysis on subdomain labels to automatically flag potential base64/hex DNS tunneling vectors.
 
 ---
 
@@ -51,7 +51,7 @@ npx envtrap run node app.js
 
 ## Usage
 
-Prefix your Node.js startup command with `envtrap run`:
+Prefix your existing Node.js startup command with `envtrap run`:
 
 ```bash
 envtrap run node app.js
@@ -69,22 +69,22 @@ envtrap run npm run start
 ### CLI Flags
 
 ```bash
-# Custom .env file
+# Custom .env file path
 envtrap run --env-file .env.production node app.js
 
-# Disable HTTPS MITM proxy
+# Disable HTTPS MITM proxy (bypasses network interception)
 envtrap run --no-mitm node app.js
 
-# Verbose debug output
+# Verbose output (logs cert issuance and network handshake information)
 envtrap run --verbose node app.js
 
-# Quiet mode — suppress alerts, show summary only
+# Quiet mode (suppress terminal alerts, prints exit summary only)
 envtrap run --quiet node app.js
 
-# Write structured JSONL events
+# Append JSONL events to a custom file
 envtrap run --log-file logs/envtrap.jsonl node app.js
 
-# Validate envtrap.json before running
+# Verify the syntax of envtrap.json
 envtrap check
 ```
 
@@ -92,7 +92,7 @@ envtrap check
 
 ## Configuration (`envtrap.json`)
 
-Create an optional `envtrap.json` in your project root. All fields are optional — defaults are secure out of the box.
+You can customize rules by creating an `envtrap.json` file in your project root:
 
 ```json
 {
@@ -118,6 +118,10 @@ Create an optional `envtrap.json` in your project root. All fields are optional 
 
 ### Channel Modes
 
-- **`block`**: Log leak event, redact secrets, and kill the process/connection immediately.
-- **`warn`**: Log leak event, redact secrets, and allow execution to continue.
-- **`off`**: Turn off scanning for this channel entirely.
+- **`block`**: Halts execution, closes the network stream, or interrupts the system command immediately when a secret leak is detected.
+- **`warn`**: Emits a warning log detailing the leak event, redacts the matched content, and allows the operation to proceed.
+- **`off`**: Disables the corresponding interception channel entirely.
+
+### Exclusions & Subdomain Bypasses
+- **`domains`**: Bypasses network interception for specific target hosts. These domains are automatically appended to the environment's `NO_PROXY` parameters.
+- **`paths`**: Glob patterns targeting source files. Detections originating from source code inside these paths are ignored.
