@@ -12,13 +12,13 @@ Unlike static analysis (SAST) tools that scan source code at build time, `envtra
 
 If you want to understand how the codebase works, how modules are intercepted, or how to contribute, refer to our modular developer guides:
 
-- **[System Architecture](docs/architecture.md)**: High-level design, directory structure layout map, and component responsibilities.
-- **[Interception Flow & Runtime Hooks](docs/interception-flow.md)**: ESM loaders, CommonJS require patching, parent-child communication line protocol, and TLS proxy decryption.
-- **[SOLID Coding Principles & Standards](docs/coding-principles.md)**: Details on Clean Architecture boundaries, SOLID design patterns, stateless execution, and testability design guidelines.
-- **[Extending envtrap](docs/extending-envtrap.md)**: Step-by-step guides to add a new scan channel, create custom secret loaders, write custom reporters, and add integration tests.
-- **[Contributing Guidelines](CONTRIBUTING.md)**: Setup instructions, local testing, build compilation, and PR rules.
-- **[Security Policy](SECURITY.md)**: Supported versions and disclosure rules.
-- **[License](LICENSE.md)**: MIT License details.
+- **[System Architecture](https://github.com/EnvTrap/envtrap-package/blob/main/docs/architecture.md)**: High-level design, directory structure layout map, and component responsibilities.
+- **[Interception Flow & Runtime Hooks](https://github.com/EnvTrap/envtrap-package/blob/main/docs/interception-flow.md)**: ESM loaders, CommonJS require patching, parent-child communication line protocol, and TLS proxy decryption.
+- **[SOLID Coding Principles & Standards](https://github.com/EnvTrap/envtrap-package/blob/main/docs/coding-principles.md)**: Details on Clean Architecture boundaries, SOLID design patterns, stateless execution, and testability design guidelines.
+- **[Extending envtrap](https://github.com/EnvTrap/envtrap-package/blob/main/docs/extending-envtrap.md)**: Step-by-step guides to add a new scan channel, create custom secret loaders, write custom reporters, and add integration tests.
+- **[Contributing Guidelines](https://github.com/EnvTrap/envtrap-package/blob/main/CONTRIBUTING.md)**: Setup instructions, local testing, build compilation, and PR rules.
+- **[Security Policy](https://github.com/EnvTrap/envtrap-package/blob/main/SECURITY.md)**: Supported versions and disclosure rules.
+- **[License](https://github.com/EnvTrap/envtrap-package/blob/main/LICENSE.md)**: MIT License details.
 
 ---
 
