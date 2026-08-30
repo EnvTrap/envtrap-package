@@ -1,6 +1,6 @@
 {
   "name": "envtrap",
-  "version": "2.1.1",
+  "version": "3.0.0",
   "description": "Zero-Configuration Runtime Secret Leak Detector for Node.js 18+",
   "main": "dist/cli/index.js",
   "bin": {
