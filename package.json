@@ -1,6 +1,10 @@
 {
   "name": "envtrap",
   "version": "3.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EnvTrap/envtrap-package.git"
+  },
   "description": "Zero-Configuration Runtime Secret Leak Detector for Node.js 18+",
   "main": "dist/cli/index.js",
   "bin": {
