@@ -20,7 +20,7 @@
     "start": "node dist/cli/index.js",
     "pretest": "pnpm run build",
     "pretest:coverage": "pnpm run build",
-    "test": "node --test test/**/*.test.js",
+    "test": "node scripts/run-tests.mjs",
     "test:unit": "node --test test/unit/*.test.js",
     "test:integration": "node --test test/integration/*.test.js",
     "test:e2e": "node --test test/e2e/*.test.js",
