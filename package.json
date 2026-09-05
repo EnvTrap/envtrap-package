@@ -21,9 +21,9 @@
     "pretest": "pnpm run build",
     "pretest:coverage": "pnpm run build",
     "test": "node scripts/run-tests.mjs",
-    "test:unit": "node --test test/unit/*.test.js",
-    "test:integration": "node --test test/integration/*.test.js",
-    "test:e2e": "node --test test/e2e/*.test.js",
+    "test:unit": "node scripts/run-tests.mjs unit",
+    "test:integration": "node scripts/run-tests.mjs integration",
+    "test:e2e": "node scripts/run-tests.mjs e2e",
     "test:coverage": "node --test --experimental-test-coverage test/**/*.test.js",
     "postinstall": ""
   },

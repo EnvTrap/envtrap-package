@@ -1,14 +1,56 @@
-name: Test Suite
+name: PR & Build Verification
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # --------------------------------------------------------------------------
+  # Stage 1: Fast Code Quality & Packaging Gate
+  # --------------------------------------------------------------------------
+  quality:
+    name: Code Quality & Packaging
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript Typecheck
+        run: pnpm run typecheck
+
+      - name: Build Package
+        run: pnpm run build
+
+      - name: Verify Package Tarball (npm pack)
+        run: npm pack --dry-run
+
+  # --------------------------------------------------------------------------
+  # Stage 2: Cross-Platform Matrix Test Suite (15 OS/Node combinations)
+  # --------------------------------------------------------------------------
   test:
     name: Node ${{ matrix.node-version }} on ${{ matrix.os }}
+    needs: [quality]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -43,4 +85,31 @@ jobs:
 
       - name: Run Test Suite
         run: pnpm test
+
+  # --------------------------------------------------------------------------
+  # Stage 3: Required PR Status Gate (GitHub Branch Protection target)
+  # --------------------------------------------------------------------------
+  pr-check:
+    name: PR Build Check
+    runs-on: ubuntu-latest
+    needs: [quality, test]
+    if: always()
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Verify All PR Checks Passed
+        run: |
+          QUALITY_RESULT="${{ needs.quality.result }}"
+          TEST_RESULT="${{ needs.test.result }}"
+          
+          echo "Stage 1 (Code Quality): $QUALITY_RESULT"
+          echo "Stage 2 (Matrix Tests): $TEST_RESULT"
+          
+          if [ "$QUALITY_RESULT" != "success" ] || [ "$TEST_RESULT" != "success" ]; then
+            echo "ERROR: One or more required checks failed or were cancelled."
+            exit 1
+          fi
+          
+          echo "SUCCESS: All PR build and test checks passed."
 
