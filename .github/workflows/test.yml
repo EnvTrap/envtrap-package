@@ -37,6 +37,6 @@ jobs:
       - name: Build Package
         run: pnpm run build
 
-      - name: Run Test Suite with Coverage
-        run: pnpm run test:coverage
+      - name: Run Test Suite
+        run: pnpm test
 
