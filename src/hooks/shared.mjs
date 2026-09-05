@@ -43,15 +43,23 @@ export function getCallerFile() {
 
     // Normalise file:// URLs
     if (filePath.startsWith('file://')) {
-      try { filePath = new URL(filePath).pathname; } catch { /* ignore */ }
+      try {
+        const url = new URL(filePath);
+        filePath = url.pathname;
+        if (/^\/[a-zA-Z]:/.test(filePath)) {
+          filePath = filePath.slice(1);
+        }
+      } catch { /* ignore */ }
     }
+
+    const isAbs = filePath.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(filePath) || filePath.startsWith('file://');
 
     // Skip internal / envtrap frames
     if (
       !filePath ||
       filePath.includes('node:internal') ||
       filePath.includes('internal/') ||
-      (!filePath.startsWith('/') && !filePath.startsWith('file://')) ||
+      !isAbs ||
       filePath.includes('hooks.mjs') ||
       filePath.includes('hooks.js') ||
       filePath.includes('node_modules/envtrap')
