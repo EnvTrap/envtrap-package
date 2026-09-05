@@ -19,6 +19,12 @@ function isRoot(): boolean {
   }
 }
 
+function canModifyTrustStore(): boolean {
+  if (process.env.CI) return false;
+  if (process.platform === 'win32') return true;
+  return isRoot();
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -36,7 +42,7 @@ function isRoot(): boolean {
 export function injectSystemCA(caCertPath: string, verbose = false): void {
   const platform = process.platform;
 
-  if (!isRoot() && platform !== 'win32') {
+  if (!canModifyTrustStore()) {
     if (verbose) {
       console.error(
         '[envtrap] info: Cross-language CA injection skipped (requires root/sudo)',
@@ -55,17 +61,17 @@ export function injectSystemCA(caCertPath: string, verbose = false): void {
       if (verbose) console.error('[envtrap] info: CA added to macOS Keychain');
 
     } else if (platform === 'win32') {
-      execFileSync('certutil', ['-addstore', '-user', 'root', caCertPath], { stdio: 'ignore' });
+      execFileSync('certutil', ['-addstore', '-user', 'root', caCertPath], { stdio: 'ignore', timeout: 5000 });
       if (verbose) console.error('[envtrap] info: CA added to Windows Trusted Root');
 
     } else if (platform === 'linux') {
       if (fs.existsSync('/usr/local/share/ca-certificates/')) {
         fs.copyFileSync(caCertPath, '/usr/local/share/ca-certificates/envtrap-ca.crt');
-        execFileSync('update-ca-certificates', [], { stdio: 'ignore' });
+        execFileSync('update-ca-certificates', [], { stdio: 'ignore', timeout: 5000 });
         if (verbose) console.error('[envtrap] info: CA added to Debian/Ubuntu trust store');
       } else if (fs.existsSync('/etc/pki/ca-trust/source/anchors/')) {
         fs.copyFileSync(caCertPath, '/etc/pki/ca-trust/source/anchors/envtrap-ca.crt');
-        execFileSync('update-ca-trust', [], { stdio: 'ignore' });
+        execFileSync('update-ca-trust', [], { stdio: 'ignore', timeout: 5000 });
         if (verbose) console.error('[envtrap] info: CA added to RHEL/Fedora trust store');
       }
     }
@@ -84,24 +90,24 @@ export function injectSystemCA(caCertPath: string, verbose = false): void {
  * Always fails silently — cleanup must never crash the process.
  */
 export function removeSystemCA(caCertPath: string): void {
-  if (!isRoot() && process.platform !== 'win32') return;
+  if (!canModifyTrustStore()) return;
 
   try {
     const platform = process.platform;
 
     if (platform === 'darwin') {
-      execFileSync('security', ['remove-trusted-cert', '-d', caCertPath], { stdio: 'ignore' });
+      execFileSync('security', ['remove-trusted-cert', '-d', caCertPath], { stdio: 'ignore', timeout: 5000 });
 
     } else if (platform === 'win32') {
-      execFileSync('certutil', ['-delstore', '-user', 'root', 'envtrap Root CA'], { stdio: 'ignore' });
+      execFileSync('certutil', ['-delstore', '-user', 'root', 'envtrap Root CA'], { stdio: 'ignore', timeout: 5000 });
 
     } else if (platform === 'linux') {
       if (fs.existsSync('/usr/local/share/ca-certificates/envtrap-ca.crt')) {
         fs.unlinkSync('/usr/local/share/ca-certificates/envtrap-ca.crt');
-        execFileSync('update-ca-certificates', ['--fresh'], { stdio: 'ignore' });
+        execFileSync('update-ca-certificates', ['--fresh'], { stdio: 'ignore', timeout: 5000 });
       } else if (fs.existsSync('/etc/pki/ca-trust/source/anchors/envtrap-ca.crt')) {
         fs.unlinkSync('/etc/pki/ca-trust/source/anchors/envtrap-ca.crt');
-        execFileSync('update-ca-trust', [], { stdio: 'ignore' });
+        execFileSync('update-ca-trust', [], { stdio: 'ignore', timeout: 5000 });
       }
     }
   } catch {

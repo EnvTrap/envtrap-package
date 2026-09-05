@@ -14,7 +14,7 @@
     "dist/"
   ],
   "scripts": {
-    "build": "tsc && mkdir -p dist/hooks/virtual && cp src/hooks/hooks.mjs dist/hooks/hooks.mjs && cp src/hooks/shared.mjs dist/hooks/shared.mjs && cp src/hooks/virtual/child-process.mjs dist/hooks/virtual/child-process.mjs && cp src/hooks/virtual/dns.mjs dist/hooks/virtual/dns.mjs && cp src/hooks/hooks.mjs dist/hooks.mjs",
+    "build": "tsc && node scripts/copy-hooks.mjs",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "start": "node dist/cli/index.js",

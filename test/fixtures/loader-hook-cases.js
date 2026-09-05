@@ -6,7 +6,7 @@ const secret = process.env.TEST_SECRET_KEY || ['sk', 'test', 'fixture_secret_val
 
 // 1. Test child_process.spawn
 try {
-  spawn('echo', ['spawn-test'], {
+  spawn(process.execPath, ['-e', ''], {
     env: { TEST_SECRET_KEY: secret }
   });
 } catch (err) {

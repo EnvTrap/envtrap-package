@@ -5,6 +5,7 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
+import { pathToFileURL } from 'url';
 import type { RunOptions } from './runner.js';
 import { RunCommand } from './RunCommand.js';
 import { loadConfig } from '../config/ConfigLoader.js';
@@ -97,11 +98,13 @@ export class RunCommandBuilder {
     const distHooks = path.resolve(__dirname, '..', 'hooks', 'hooks.mjs');
     const srcHooks  = path.resolve(__dirname, '..', '..', 'src', 'hooks', 'hooks.mjs');
 
-    if (fs.existsSync(distHooks)) return distHooks;
-    if (fs.existsSync(srcHooks))  return srcHooks;
+    const resolved = fs.existsSync(distHooks) ? distHooks : fs.existsSync(srcHooks) ? srcHooks : null;
+    if (!resolved) {
+      throw new Error(
+        `[envtrap] Cannot find hooks.mjs. Expected at:\n  ${distHooks}\n  ${srcHooks}`,
+      );
+    }
 
-    throw new Error(
-      `[envtrap] Cannot find hooks.mjs. Expected at:\n  ${distHooks}\n  ${srcHooks}`,
-    );
+    return pathToFileURL(resolved).href;
   }
 }

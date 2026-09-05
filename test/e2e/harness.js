@@ -1,6 +1,7 @@
 // test/e2e/harness.js
 const { spawn } = require('node:child_process');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const CLI_PATH = path.resolve(__dirname, '../../dist/cli/index.js');
 const HOOKS_PATH = path.resolve(__dirname, '../../dist/hooks/hooks.mjs');
@@ -34,7 +35,8 @@ function runCli(args = [], customEnv = {}, cwd = process.cwd()) {
 
 function runWithImport(scriptPath, customEnv = {}, cwd = process.cwd()) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [`--import=${HOOKS_PATH}`, scriptPath], {
+    const hooksUrl = pathToFileURL(HOOKS_PATH).href;
+    const child = spawn(process.execPath, [`--import=${hooksUrl}`, scriptPath], {
       cwd,
       env: { ...process.env, ...customEnv },
       stdio: ['pipe', 'pipe', 'pipe']
