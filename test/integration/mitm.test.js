@@ -1,63 +1,13 @@
-// test/unit/mitm.test.js
+// test/integration/mitm.test.js
 const test = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
-const net = require('node:net');
-const { parseHttpRequest, formatNetworkContext } = require('../../dist/detection/HttpParser.js');
+const tls = require('node:tls');
 const { CertificateAuthority } = require('../../dist/mitm/CertificateAuthority.js');
 const { MitmServer } = require('../../dist/mitm/MitmServer.js');
 
 // ============================================================================
-// HttpParser Unit Tests
-// ============================================================================
-test('HttpParser - parse standard requests', () => {
-  const rawGet = 
-    'GET /v1/charges?limit=3 HTTP/1.1\r\n' +
-    'Host: api.stripe.com\r\n' +
-    'Authorization: Bearer my_secret_token_123\r\n' +
-    'Connection: close\r\n\r\n';
-
-  const parsed = parseHttpRequest(rawGet);
-  assert.notStrictEqual(parsed, null);
-  assert.strictEqual(parsed.method, 'GET');
-  assert.strictEqual(parsed.url, '/v1/charges?limit=3');
-  assert.strictEqual(parsed.host, 'api.stripe.com');
-  assert.strictEqual(parsed.headers['Authorization'], 'Bearer my_secret_token_123');
-  assert.strictEqual(parsed.body, '');
-});
-
-test('HttpParser - parse post request with body', () => {
-  const rawPost =
-    'POST /v1/refunds HTTP/1.1\r\n' +
-    'Host: api.stripe.com\r\n' +
-    'Content-Length: 15\r\n\r\n' +
-    'charge=ch_123456';
-
-  const parsed = parseHttpRequest(rawPost);
-  assert.notStrictEqual(parsed, null);
-  assert.strictEqual(parsed.method, 'POST');
-  assert.strictEqual(parsed.body, 'charge=ch_123456');
-});
-
-test('HttpParser - parse malformed requests', () => {
-  assert.strictEqual(parseHttpRequest(''), null);
-  assert.strictEqual(parseHttpRequest('NOT-HTTP-LINE\r\n\r\n'), null);
-});
-
-test('HttpParser - format network context audits', () => {
-  const rawGet = 
-    'GET /v1/charges HTTP/1.1\r\n' +
-    'Host: api.stripe.com\r\n' +
-    'Authorization: Bearer ' + 'sk_test_' + 'my_stripe_secret_123\r\n\r\n';
-
-  const audit = formatNetworkContext(rawGet, 'sk_test_' + 'my_stripe_secret_123');
-  assert.match(audit, /Destination Host: api.stripe.com/);
-  assert.match(audit, /Request Line:     GET \/v1\/charges/);
-  assert.match(audit, /Authorization: Bearer \[REDACTED: SHA256:[a-f0-9]{8}\]/);
-});
-
-// ============================================================================
-// CertificateAuthority Unit Tests
+// CertificateAuthority Tests
 // ============================================================================
 test('CertificateAuthority - key generation & signing', () => {
   const ca = new CertificateAuthority();
@@ -95,9 +45,9 @@ test('MitmServer - live proxying & leak interceptions', async (t) => {
       scannedPayloads.push({ content, channel });
       if (content.includes('secret_key_99999')) {
         blockedCount++;
-        return { hasSecret: true, secretName: 'MOCK_SECRET', value: 'secret_key_99999' };
+        return { leaked: true, blocked: true, secret: { name: 'MOCK_SECRET', value: 'secret_key_99999', source: 'env' } };
       }
-      return { hasSecret: false };
+      return { leaked: false, blocked: false };
     }
   };
 
@@ -222,6 +172,140 @@ test('MitmServer - live proxying & leak interceptions', async (t) => {
       req.end();
     });
   });
+});
+
+test('MitmServer - allowed domain bypasses interception', async () => {
+  let targetServer;
+  try {
+    targetServer = http.createServer((req, res) => {
+      res.writeHead(200);
+      res.end('allowed target response');
+    });
+    const targetPort = await new Promise(r => targetServer.listen(0, '127.0.0.1', () => r(targetServer.address().port)));
+
+    const mockScanner = {
+      scan: () => {
+        throw new Error('Scanner should NOT be called for excluded domain');
+      }
+    };
+    const ca = new CertificateAuthority();
+    const config = {
+      channels: { stdout: 'warn', stderr: 'warn', network: 'block', child_process: 'warn', dns: 'block' },
+      exclusions: { domains: ['127.0.0.1'], paths: [] },
+      entropy: { threshold: 3.5, minLength: 12 },
+      quiet: true,
+      logFile: null
+    };
+    const mitm = new MitmServer(ca, mockScanner, { warn: () => {}, info: () => {} }, config, false);
+    const proxyPort = await mitm.start();
+
+    // Make request with secret in body to excluded domain
+    const resp = await makeProxyRequest(proxyPort, targetPort, 'POST', '/test', {}, 'secret_key_99999');
+    assert.strictEqual(resp, 'allowed target response');
+
+    await mitm.stop();
+  } finally {
+    if (targetServer) targetServer.close();
+  }
+});
+
+test('MitmServer - network channel mode off forwards without blocking', async () => {
+  let targetServer;
+  try {
+    targetServer = http.createServer((req, res) => {
+      res.writeHead(200);
+      res.end('off mode response');
+    });
+    const targetPort = await new Promise(r => targetServer.listen(0, '127.0.0.1', () => r(targetServer.address().port)));
+
+    const mockScanner = {
+      scan: () => {
+        throw new Error('Scanner should NOT be called when mode is off');
+      }
+    };
+    const ca = new CertificateAuthority();
+    const config = {
+      channels: { stdout: 'warn', stderr: 'warn', network: 'off', child_process: 'warn', dns: 'block' },
+      exclusions: { domains: [], paths: [] },
+      entropy: { threshold: 3.5, minLength: 12 },
+      quiet: true,
+      logFile: null
+    };
+    const mitm = new MitmServer(ca, mockScanner, { warn: () => {}, info: () => {} }, config, false);
+    const proxyPort = await mitm.start();
+
+    const resp = await makeProxyRequest(proxyPort, targetPort, 'POST', '/test', {}, 'secret_key_99999');
+    assert.strictEqual(resp, 'off mode response');
+
+    await mitm.stop();
+  } finally {
+    if (targetServer) targetServer.close();
+  }
+});
+
+test('MitmServer - CONNECT tunnel and TLS leak interception', async () => {
+  const ca = new CertificateAuthority();
+  const caMaterials = ca.initCA();
+  let tlsScanned = false;
+
+  const mockScanner = {
+    scan: (content, channel) => {
+      if (content.includes('tls_secret_token')) {
+        tlsScanned = true;
+        return { leaked: true, blocked: true };
+      }
+      return { leaked: false, blocked: false };
+    }
+  };
+
+  const config = {
+    channels: { stdout: 'warn', stderr: 'warn', network: 'block', child_process: 'warn', dns: 'block' },
+    exclusions: { domains: [], paths: [] },
+    entropy: { threshold: 3.5, minLength: 12 },
+    quiet: true,
+    logFile: null
+  };
+
+  const mitm = new MitmServer(ca, mockScanner, { warn: () => {}, info: () => {} }, config, false);
+  const proxyPort = await mitm.start();
+
+  try {
+    await new Promise((resolve, reject) => {
+      const connectReq = http.request({
+        host: '127.0.0.1',
+        port: proxyPort,
+        method: 'CONNECT',
+        path: 'localhost:8443'
+      });
+
+      connectReq.on('connect', (res, socket) => {
+        assert.strictEqual(res.statusCode, 200);
+
+        const tlsSocket = tls.connect({
+          socket: socket,
+          servername: 'localhost',
+          ca: caMaterials.certPem,
+          rejectUnauthorized: true
+        }, () => {
+          tlsSocket.write('POST /api HTTP/1.1\r\nHost: localhost\r\n\r\ntls_secret_token');
+        });
+
+        tlsSocket.on('close', () => {
+          assert.strictEqual(tlsScanned, true);
+          resolve();
+        });
+        tlsSocket.on('error', () => {
+          assert.strictEqual(tlsScanned, true);
+          resolve();
+        });
+      });
+
+      connectReq.on('error', reject);
+      connectReq.end();
+    });
+  } finally {
+    await mitm.stop();
+  }
 });
 
 // Helper function to issue requests through the loopback proxy

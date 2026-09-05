@@ -94,3 +94,89 @@ test('PathMatcher - glob rules', () => {
   // Rejects normal files
   assert.strictEqual(isPathExcluded('src/domain/scanner.ts', patterns), false);
 });
+
+// ============================================================================
+// ConfigLoader Tests
+// ============================================================================
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { ConfigLoader, loadConfig } = require('../../dist/config/ConfigLoader.js');
+
+test('ConfigLoader - returns defaults when envtrap.json is absent', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'envtrap-config-test-'));
+  try {
+    const res = loadConfig(tmpDir);
+    assert.strictEqual(res.loaded, false);
+    assert.strictEqual(res.errors.length, 0);
+    assert.deepStrictEqual(res.config, DEFAULT_CONFIG);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('ConfigLoader - handles invalid JSON syntax gracefully', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'envtrap-config-test-'));
+  try {
+    fs.writeFileSync(path.join(tmpDir, 'envtrap.json'), '{ invalid json syntax');
+    const res = new ConfigLoader().load(tmpDir);
+    assert.strictEqual(res.loaded, true);
+    assert.strictEqual(res.errors.length, 1);
+    assert.match(res.errors[0].message, /Failed to parse JSON/);
+    assert.deepStrictEqual(res.config, DEFAULT_CONFIG);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('ConfigLoader - loads, merges and validates valid custom config', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'envtrap-config-test-'));
+  try {
+    const custom = {
+      channels: { stdout: 'block', network: 'off' },
+      exclusions: { domains: ['api.github.com'] },
+      quiet: true
+    };
+    fs.writeFileSync(path.join(tmpDir, 'envtrap.json'), JSON.stringify(custom));
+    const res = loadConfig(tmpDir);
+    assert.strictEqual(res.loaded, true);
+    assert.strictEqual(res.errors.length, 0);
+    assert.strictEqual(res.config.channels.stdout, 'block');
+    assert.strictEqual(res.config.channels.network, 'off');
+    assert.strictEqual(res.config.exclusions.domains[0], 'api.github.com');
+    assert.strictEqual(res.config.quiet, true);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('ConfigValidator - non-object root and scalar errors', () => {
+  const validator = new ConfigValidator();
+
+  // Non-object root
+  const rootErr1 = validator.validate(null);
+  assert.strictEqual(rootErr1[0].message, 'Root config must be a JSON object');
+  const rootErr2 = validator.validate('not an object');
+  assert.strictEqual(rootErr2[0].message, 'Root config must be a JSON object');
+  const rootErr3 = validator.validate([1, 2, 3]);
+  assert.strictEqual(rootErr3[0].message, 'Root config must be a JSON object');
+
+  // Non-object subsections
+  const subErrors = validator.validate({
+    channels: 'invalid',
+    exclusions: 'invalid',
+    entropy: 'invalid',
+    logFile: 12345
+  });
+  assert.ok(subErrors.some(e => e.path === '$.channels'));
+  assert.ok(subErrors.some(e => e.path === '$.exclusions'));
+  assert.ok(subErrors.some(e => e.path === '$.entropy'));
+  assert.ok(subErrors.some(e => e.path === '$.logFile'));
+
+  // Unknown channel key
+  const unknownKeyErr = validator.validate({
+    channels: { unknown_channel: 'block' }
+  });
+  assert.ok(unknownKeyErr.some(e => e.message.includes('Unknown channel key')));
+});
+
