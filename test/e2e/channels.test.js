@@ -71,5 +71,9 @@ test('Channel DNS: intercepts and blocks domain query containing secret', async 
   assert.match(stderr, /Channel:\s+DNS/);
 
   // Verification that DNS lookup was blocked
-  assert.match(stdout, /DNS_BLOCKED_RESULT:|DNS_THROWN_RESULT:/);
+  assert.match(
+    stdout,
+    /DNS_BLOCKED_RESULT:|DNS_THROWN_RESULT:/,
+    'Expected DNS lookup to be intercepted or blocked'
+  );
 });
