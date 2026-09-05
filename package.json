@@ -6,7 +6,7 @@
     "url": "git+https://github.com/EnvTrap/envtrap-package.git"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
   },
   "description": "Zero-Configuration Runtime Secret Leak Detector for Node.js 18+",
   "main": "dist/cli/index.js",

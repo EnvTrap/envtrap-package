@@ -4,9 +4,18 @@ name: Publish Package
 on:
   release:
     types: [published]
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
-  publish:
+  verify:
+    name: Build & Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -21,7 +30,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
@@ -29,10 +37,67 @@ jobs:
       - name: Build Package
         run: pnpm build
 
-      - name: Run Unit Tests
+      - name: Run Full Test Suite
         run: pnpm test
 
-      - name: Publish to NPM
-        run: pnpm publish --no-git-checks
+  publish-npm:
+    name: Publish to npmjs.com
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js (npmjs)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install Dependencies & Build
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Publish to npmjs.com
+        run: pnpm publish --no-git-checks --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-github:
+    name: Publish to GitHub Packages
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js (GitHub Packages)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: Install Dependencies & Build
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Publish to GitHub Packages
+        run: pnpm publish --no-git-checks --registry https://npm.pkg.github.com
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
