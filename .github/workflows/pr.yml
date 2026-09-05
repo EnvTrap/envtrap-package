@@ -1,17 +1,14 @@
-name: PR & Build Verification
+name: PR Check
 
 on:
   pull_request:
     branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: pr-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # --------------------------------------------------------------------------
-  # Stage 1: Fast Code Quality & Packaging Gate
-  # --------------------------------------------------------------------------
   quality:
     name: Code Quality & Packaging
     runs-on: ubuntu-latest
@@ -45,9 +42,6 @@ jobs:
       - name: Verify Package Tarball (npm pack)
         run: npm pack --dry-run
 
-  # --------------------------------------------------------------------------
-  # Stage 2: Cross-Platform Matrix Test Suite (15 OS/Node combinations)
-  # --------------------------------------------------------------------------
   test:
     name: Node ${{ matrix.node-version }} on ${{ matrix.os }}
     needs: [quality]
@@ -86,9 +80,6 @@ jobs:
       - name: Run Test Suite
         run: pnpm test
 
-  # --------------------------------------------------------------------------
-  # Stage 3: Required PR Status Gate (GitHub Branch Protection target)
-  # --------------------------------------------------------------------------
   pr-check:
     name: PR Build Check
     runs-on: ubuntu-latest
@@ -112,4 +103,3 @@ jobs:
           fi
           
           echo "SUCCESS: All PR build and test checks passed."
-
