@@ -1,6 +1,6 @@
 {
   "name": "@envtrap/envtrap",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/EnvTrap/envtrap-package.git"
@@ -29,7 +29,14 @@
     "test:coverage": "node --test --experimental-test-coverage test/**/*.test.js",
     "postinstall": ""
   },
-  "keywords": ["security", "secrets", "env", "leak", "detector", "nodejs"],
+  "keywords": [
+    "security",
+    "secrets",
+    "env",
+    "leak",
+    "detector",
+    "nodejs"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
