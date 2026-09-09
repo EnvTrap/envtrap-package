@@ -22,8 +22,8 @@ export class StdioHandler {
   handleStdout(chunk: Buffer, onBlock: () => void): void {
     const raw = chunk.toString('utf-8');
     const result = this.scanner.scan(raw, 'stdout');
-    const redacted = this.redactor.redact(raw);
-    process.stdout.write(redacted);
+    const output = result.leaked ? this.redactor.redact(raw) : raw;
+    process.stdout.write(output);
 
     if (result.blocked) {
       onBlock();
@@ -77,8 +77,8 @@ export class StdioHandler {
 
     // Regular stderr line
     const result = this.scanner.scan(line, 'stderr');
-    const redacted = this.redactor.redact(line);
-    process.stderr.write(redacted + '\n');
+    const output = result.leaked ? this.redactor.redact(line) : line;
+    process.stderr.write(output + '\n');
 
     if (result.blocked) {
       onBlock();

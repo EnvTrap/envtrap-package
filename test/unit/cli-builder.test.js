@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { ChildEnvBuilder } = require('../../dist/cli/ChildEnvBuilder.js');
 const { HookMessageParser } = require('../../dist/cli/HookMessageParser.js');
+const { StdioHandler } = require('../../dist/cli/StdioHandler.js');
 const { DEFAULT_CONFIG } = require('../../dist/config/ConfigTypes.js');
 
 test('ChildEnvBuilder - builds environment with MITM enabled', () => {
@@ -94,4 +95,72 @@ test('HookMessageParser - parses DNS leak and warning protocols', () => {
   assert.strictEqual(warning.detail, 'a8b9c1d2e3f4g5.test.com');
 
   assert.strictEqual(parser.parse('random normal line output').type, 'none');
+});
+
+test('StdioHandler - skips redaction pass on clean stream output', () => {
+  let redactCalled = false;
+  let stdoutWritten = '';
+
+  const mockScanner = {
+    scan: () => ({ leaked: false, blocked: false }),
+    checkChildEnv: () => ({ leaked: false, blocked: false }),
+    getEvents: () => [],
+  };
+
+  const mockRedactor = {
+    redact: (text) => {
+      redactCalled = true;
+      return text;
+    },
+  };
+
+  const origStdoutWrite = process.stdout.write;
+  process.stdout.write = (chunk) => {
+    stdoutWritten += chunk;
+    return true;
+  };
+
+  try {
+    const handler = new StdioHandler(mockScanner, mockRedactor, [], () => {});
+    handler.handleStdout(Buffer.from('clean log output'), () => {});
+
+    assert.strictEqual(redactCalled, false);
+    assert.strictEqual(stdoutWritten, 'clean log output');
+  } finally {
+    process.stdout.write = origStdoutWrite;
+  }
+});
+
+test('StdioHandler - executes redaction when leaked is true', () => {
+  let redactCalled = false;
+  let stdoutWritten = '';
+
+  const mockScanner = {
+    scan: () => ({ leaked: true, blocked: false }),
+    checkChildEnv: () => ({ leaked: false, blocked: false }),
+    getEvents: () => [],
+  };
+
+  const mockRedactor = {
+    redact: () => {
+      redactCalled = true;
+      return '[REDACTED]';
+    },
+  };
+
+  const origStdoutWrite = process.stdout.write;
+  process.stdout.write = (chunk) => {
+    stdoutWritten += chunk;
+    return true;
+  };
+
+  try {
+    const handler = new StdioHandler(mockScanner, mockRedactor, [], () => {});
+    handler.handleStdout(Buffer.from('log with secret'), () => {});
+
+    assert.strictEqual(redactCalled, true);
+    assert.strictEqual(stdoutWritten, '[REDACTED]');
+  } finally {
+    process.stdout.write = origStdoutWrite;
+  }
 });
