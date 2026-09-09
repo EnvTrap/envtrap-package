@@ -79,8 +79,10 @@ function checkChildEnv(env, command) {
   const mode = configModes.child_process || 'warn';
   if (mode === 'off') return;
 
-  const caller = getCallerFile();
-  if (caller && isPathExcluded(caller, pathExclusions)) return;
+  if (pathExclusions.length > 0) {
+    const caller = getCallerFile();
+    if (caller && isPathExcluded(caller, pathExclusions)) return;
+  }
 
   for (const name in secretsMap) {
     const value = secretsMap[name];
@@ -225,8 +227,10 @@ function checkLookup(specifier) {
   const mode = configModes.dns || 'block';
   if (mode === 'off') return;
 
-  const caller = getCallerFile();
-  if (caller && isPathExcluded(caller, pathExclusions)) return;
+  if (pathExclusions.length > 0) {
+    const caller = getCallerFile();
+    if (caller && isPathExcluded(caller, pathExclusions)) return;
+  }
 
   for (const name in secretsMap) {
     const value = secretsMap[name];
@@ -290,22 +294,26 @@ if (isMainThread) {
   };
 
   // stdout/stderr pre-redaction for excluded callers
-  const origStdout = process.stdout.write.bind(process.stdout);
-  const origStderr = process.stderr.write.bind(process.stderr);
+  if (pathExclusions.length > 0) {
+    const origStdout = process.stdout.write.bind(process.stdout);
+    const origStderr = process.stderr.write.bind(process.stderr);
 
-  process.stdout.write = function(chunk, encoding, callback) {
-    const caller = getCallerFile();
-    const args = [...arguments];
-    if (caller && isPathExcluded(caller, pathExclusions)) args[0] = preRedact(chunk, secretsMap);
-    return origStdout(...args);
-  };
+    process.stdout.write = function(chunk, encoding, callback) {
+      if (pathExclusions.length === 0) return origStdout.apply(process.stdout, arguments);
+      const caller = getCallerFile();
+      const args = [...arguments];
+      if (caller && isPathExcluded(caller, pathExclusions)) args[0] = preRedact(chunk, secretsMap);
+      return origStdout(...args);
+    };
 
-  process.stderr.write = function(chunk, encoding, callback) {
-    const caller = getCallerFile();
-    const args = [...arguments];
-    if (caller && isPathExcluded(caller, pathExclusions)) args[0] = preRedact(chunk, secretsMap);
-    return origStderr(...args);
-  };
+    process.stderr.write = function(chunk, encoding, callback) {
+      if (pathExclusions.length === 0) return origStderr.apply(process.stderr, arguments);
+      const caller = getCallerFile();
+      const args = [...arguments];
+      if (caller && isPathExcluded(caller, pathExclusions)) args[0] = preRedact(chunk, secretsMap);
+      return origStderr(...args);
+    };
+  }
 
   // Live secret sync via MessageChannel
   if (typeof module.register === 'function') {
