@@ -142,7 +142,7 @@ export const CLOUD_DNS_ALLOWLIST = [
 
 export function isCloudDnsAllowlisted(hostname) {
   if (typeof hostname !== 'string') return false;
-  const lower = hostname.toLowerCase();
+  const lower = hostname.toLowerCase().replace(/\.$/, '');
   for (const domain of CLOUD_DNS_ALLOWLIST) {
     if (lower === domain || lower.endsWith('.' + domain)) {
       return true;
