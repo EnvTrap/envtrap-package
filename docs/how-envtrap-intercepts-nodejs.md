@@ -208,7 +208,7 @@ It uses standard network proxy environment variables:
 | **DNS Resolution** (`dns`) | `import 'node:dns'` or `require('dns')` | ESM loader hook redirects to `envtrap:dns`; CJS monkeypatches `Module.prototype.require` |
 | **Child Processes** (`child_process`) | `spawn()`, `exec()`, `fork()` | Replaces exported functions via `Module.prototype.require` and ESM loader virtual modules |
 | **Outbound HTTPS** (`network`) | `fetch()`, `axios.get()`, `https.request()` | Injects `HTTP_PROXY`, `HTTPS_PROXY`, and local Root CA into child process environment |
-| **Runtime Secret Changes** | `process.env.NEW_KEY = 'val'` | Wraps `process.env` in a JavaScript `Proxy` to detect new or deleted variables in real time |
+| **Runtime Secret Changes** | `process.env.NEW_KEY = 'val'` | Wraps `process.env` in a JavaScript `Proxy` to sync runtime-added secrets (only string values with length >= configured `entropy.minLength`, default 12) |
 
 ---
 
