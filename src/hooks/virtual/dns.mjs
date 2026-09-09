@@ -48,8 +48,10 @@ function checkLookup(specifier) {
   if (typeof specifier !== 'string') return;
   if (channelMode === 'off') return;
 
-  const caller = getCallerFile();
-  if (caller && isPathExcluded(caller, pathExclusions)) return;
+  if (pathExclusions.length > 0) {
+    const caller = getCallerFile();
+    if (caller && isPathExcluded(caller, pathExclusions)) return;
+  }
 
   for (const name in secretsMap) {
     const value = secretsMap[name];
