@@ -20,6 +20,7 @@ import { ChildProcessManager } from './ChildProcessManager.js';
 
 export class RunCommand {
   private caCertPath = '';
+  private ca: CertificateAuthority | null = null;
 
   constructor(
     private readonly config: EnvtrapConfig,
@@ -66,6 +67,7 @@ export class RunCommand {
 
   private async bootMitm(): Promise<number> {
     const ca = new CertificateAuthority();
+    this.ca = ca;
     const materials = ca.initCA();
     this.caCertPath = materials.certPath;
     injectSystemCA(this.caCertPath, this.options.verbose);
@@ -85,6 +87,9 @@ export class RunCommand {
 
     if (mitm && this.caCertPath) {
       removeSystemCA(this.caCertPath);
+    }
+    if (this.ca) {
+      this.ca.cleanup();
     }
     process.exit(forceExit ? 1 : (code ?? (signal ? 1 : 0)));
   }

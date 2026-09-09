@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
 const tls = require('node:tls');
+const fs = require('node:fs');
 const { CertificateAuthority } = require('../../dist/mitm/CertificateAuthority.js');
 const { MitmServer } = require('../../dist/mitm/MitmServer.js');
 
@@ -26,6 +27,11 @@ test('CertificateAuthority - key generation & signing', () => {
   // Cached hit validation (returns same object)
   const cachedCert = ca.generateDomainCert('api.stripe.com');
   assert.strictEqual(domainCert, cachedCert);
+
+  // File existence and cleanup validation
+  assert.strictEqual(fs.existsSync(materials.certPath), true);
+  ca.cleanup();
+  assert.strictEqual(fs.existsSync(materials.certPath), false);
 });
 
 // ============================================================================
