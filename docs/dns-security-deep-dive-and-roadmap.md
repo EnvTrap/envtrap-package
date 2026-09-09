@@ -12,7 +12,7 @@ DNS (Domain Name System) translates human-friendly names like `api.stripe.com` i
 ### Why Attackers Don't Just Use HTTP
 Suppose an attacker slips malicious code into an npm package your project installs. The code reads your secret:
 ```javascript
-const secret = process.env.STRIPE_SECRET_KEY; // "sk_live_994829482"
+const secret = process.env.STRIPE_SECRET_KEY; // "sk_test_1234567890"
 ```
 
 If the attacker tries sending this over HTTP:
