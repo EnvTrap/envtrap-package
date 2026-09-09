@@ -95,25 +95,117 @@ function checkChildEnv(env, command) {
 
 function wrapChildProcess(real) {
   const w = { ...real };
-  w.spawn       = (cmd, a, o) => { if (o?.env) checkChildEnv(o.env, cmd); return real.spawn(cmd, a, o); };
-  w.spawnSync   = (cmd, a, o) => { if (o?.env) checkChildEnv(o.env, cmd); return real.spawnSync(cmd, a, o); };
-  w.execSync    = (cmd, o)    => { if (o?.env) checkChildEnv(o.env, cmd); return real.execSync(cmd, o); };
-  w.execFileSync = (f, a, o)  => { if (o?.env) checkChildEnv(o.env, f);   return real.execFileSync(f, a, o); };
-  w.exec = (cmd, o, cb) => {
-    const opts = typeof o === 'object' && o !== null ? o : {};
-    if (opts.env) checkChildEnv(opts.env, cmd);
-    return real.exec(cmd, o, cb);
+
+  w.spawn = (command, args, options) => {
+    let actualArgs = args;
+    let actualOpts = options;
+    if (typeof actualArgs === 'object' && actualArgs !== null && !Array.isArray(actualArgs)) {
+      actualOpts = actualArgs;
+      actualArgs = [];
+    }
+    actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
+    const env = actualOpts.env ?? process.env;
+    checkChildEnv(env, command);
+    return real.spawn(command, actualArgs ?? [], actualOpts);
   };
-  w.execFile = (f, a, o, cb) => {
-    const opts = typeof o === 'object' && o !== null ? o : {};
-    if (opts.env) checkChildEnv(opts.env, f);
-    return real.execFile(f, a, o, cb);
+
+  w.spawnSync = (command, args, options) => {
+    let actualArgs = args;
+    let actualOpts = options;
+    if (typeof actualArgs === 'object' && actualArgs !== null && !Array.isArray(actualArgs)) {
+      actualOpts = actualArgs;
+      actualArgs = [];
+    }
+    actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
+    const env = actualOpts.env ?? process.env;
+    checkChildEnv(env, command);
+    return real.spawnSync(command, actualArgs ?? [], actualOpts);
   };
-  w.fork = (mod, a, o) => {
-    const opts = (!Array.isArray(a) && typeof a === 'object' && a !== null) ? a : (o || {});
-    if (opts.env) checkChildEnv(opts.env, mod);
-    return real.fork(mod, a, o);
+
+  w.exec = (command, options, callback) => {
+    let actualOpts = options;
+    let actualCb = callback;
+    if (typeof actualOpts === 'function') {
+      actualCb = actualOpts;
+      actualOpts = {};
+    } else if (!actualOpts || typeof actualOpts !== 'object') {
+      actualOpts = {};
+    }
+    const env = actualOpts.env ?? process.env;
+    checkChildEnv(env, command);
+    if (typeof actualCb === 'function') {
+      return real.exec(command, actualOpts, actualCb);
+    }
+    return real.exec(command, actualOpts);
   };
+
+  w.execSync = (command, options) => {
+    const actualOpts = options && typeof options === 'object' ? options : {};
+    const env = actualOpts.env ?? process.env;
+    checkChildEnv(env, command);
+    return real.execSync(command, actualOpts);
+  };
+
+  w.execFile = (file, args, options, callback) => {
+    let actualArgs = [];
+    let actualOpts = {};
+    let actualCb = callback;
+
+    if (Array.isArray(args)) {
+      actualArgs = args;
+      if (typeof options === 'function') {
+        actualCb = options;
+      } else if (options && typeof options === 'object') {
+        actualOpts = options;
+      }
+    } else if (typeof args === 'function') {
+      actualCb = args;
+    } else if (args && typeof args === 'object') {
+      actualOpts = args;
+      if (typeof options === 'function') {
+        actualCb = options;
+      }
+    } else if (typeof options === 'function') {
+      actualCb = options;
+    } else if (options && typeof options === 'object') {
+      actualOpts = options;
+    }
+
+    const env = actualOpts.env ?? process.env;
+    checkChildEnv(env, file);
+
+    if (typeof actualCb === 'function') {
+      return real.execFile(file, actualArgs, actualOpts, actualCb);
+    }
+    return real.execFile(file, actualArgs, actualOpts);
+  };
+
+  w.execFileSync = (file, args, options) => {
+    let actualArgs = args;
+    let actualOpts = options;
+    if (typeof actualArgs === 'object' && actualArgs !== null && !Array.isArray(actualArgs)) {
+      actualOpts = actualArgs;
+      actualArgs = [];
+    }
+    actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
+    const env = actualOpts.env ?? process.env;
+    checkChildEnv(env, file);
+    return real.execFileSync(file, actualArgs ?? [], actualOpts);
+  };
+
+  w.fork = (modulePath, args, options) => {
+    let actualArgs = args;
+    let actualOpts = options;
+    if (typeof actualArgs === 'object' && actualArgs !== null && !Array.isArray(actualArgs)) {
+      actualOpts = actualArgs;
+      actualArgs = [];
+    }
+    actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
+    const env = actualOpts.env ?? process.env;
+    checkChildEnv(env, modulePath);
+    return real.fork(modulePath, actualArgs ?? [], actualOpts);
+  };
+
   Object.setPrototypeOf(w, real);
   return w;
 }

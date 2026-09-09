@@ -63,7 +63,7 @@ function checkEnv(env, command) {
         '[envtrap] Child process leak: secret "' + name + '" passed to: ' + command + '\n'
       );
       if (channelMode === 'block') {
-        throw new Error('[envtrap] child_process block: env key "' + name + '" passed to child process');
+        throw new Error('[envtrap] child_process block: env key "' + name + '" passed to child');
       }
     }
   }
@@ -74,43 +74,114 @@ function checkEnv(env, command) {
 // ---------------------------------------------------------------------------
 
 export function spawn(command, args, options) {
-  if (options?.env) checkEnv(options.env, command);
-  return _spawn(command, args ?? [], options ?? {});
+  let actualArgs = args;
+  let actualOpts = options;
+  if (typeof actualArgs === 'object' && actualArgs !== null && !Array.isArray(actualArgs)) {
+    actualOpts = actualArgs;
+    actualArgs = [];
+  }
+  actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
+  const env = actualOpts.env ?? process.env;
+  checkEnv(env, command);
+  return _spawn(command, actualArgs ?? [], actualOpts);
 }
 
 export function exec(command, options, callback) {
-  if (options && typeof options === 'object' && options.env) checkEnv(options.env, command);
-  if (typeof options === 'function') return _exec(command, options);
-  if (typeof callback === 'function') return _exec(command, options, callback);
-  return _exec(command, options);
+  let actualOpts = options;
+  let actualCb = callback;
+  if (typeof actualOpts === 'function') {
+    actualCb = actualOpts;
+    actualOpts = {};
+  } else if (!actualOpts || typeof actualOpts !== 'object') {
+    actualOpts = {};
+  }
+  const env = actualOpts.env ?? process.env;
+  checkEnv(env, command);
+  if (typeof actualCb === 'function') {
+    return _exec(command, actualOpts, actualCb);
+  }
+  return _exec(command, actualOpts);
 }
 
 export function execFile(file, args, options, callback) {
-  if (options && typeof options === 'object' && options.env) checkEnv(options.env, file);
-  if (typeof args === 'function') return _execFile(file, args);
-  if (typeof options === 'function') return _execFile(file, args, options);
-  if (typeof callback === 'function') return _execFile(file, args, options, callback);
-  return _execFile(file, args, options);
+  let actualArgs = [];
+  let actualOpts = {};
+  let actualCb = callback;
+
+  if (Array.isArray(args)) {
+    actualArgs = args;
+    if (typeof options === 'function') {
+      actualCb = options;
+    } else if (options && typeof options === 'object') {
+      actualOpts = options;
+    }
+  } else if (typeof args === 'function') {
+    actualCb = args;
+  } else if (args && typeof args === 'object') {
+    actualOpts = args;
+    if (typeof options === 'function') {
+      actualCb = options;
+    }
+  } else if (typeof options === 'function') {
+    actualCb = options;
+  } else if (options && typeof options === 'object') {
+    actualOpts = options;
+  }
+
+  actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
+  const env = actualOpts.env ?? process.env;
+  checkEnv(env, file);
+
+  if (typeof actualCb === 'function') {
+    return _execFile(file, actualArgs, actualOpts, actualCb);
+  }
+  return _execFile(file, actualArgs, actualOpts);
 }
 
 export function fork(modulePath, args, options) {
-  if (options?.env) checkEnv(options.env, modulePath);
-  return _fork(modulePath, args ?? [], options ?? {});
+  let actualArgs = args;
+  let actualOpts = options;
+  if (typeof actualArgs === 'object' && actualArgs !== null && !Array.isArray(actualArgs)) {
+    actualOpts = actualArgs;
+    actualArgs = [];
+  }
+  actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
+  const env = actualOpts.env ?? process.env;
+  checkEnv(env, modulePath);
+  return _fork(modulePath, actualArgs ?? [], actualOpts);
 }
 
 export function spawnSync(command, args, options) {
-  if (options?.env) checkEnv(options.env, command);
-  return _spawnSync(command, args ?? [], options ?? {});
+  let actualArgs = args;
+  let actualOpts = options;
+  if (typeof actualArgs === 'object' && actualArgs !== null && !Array.isArray(actualArgs)) {
+    actualOpts = actualArgs;
+    actualArgs = [];
+  }
+  actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
+  const env = actualOpts.env ?? process.env;
+  checkEnv(env, command);
+  return _spawnSync(command, actualArgs ?? [], actualOpts);
 }
 
 export function execSync(command, options) {
-  if (options?.env) checkEnv(options.env, command);
-  return _execSync(command, options ?? {});
+  const actualOpts = options && typeof options === 'object' ? options : {};
+  const env = actualOpts.env ?? process.env;
+  checkEnv(env, command);
+  return _execSync(command, actualOpts);
 }
 
 export function execFileSync(file, args, options) {
-  if (options?.env) checkEnv(options.env, file);
-  return _execFileSync(file, args ?? [], options ?? {});
+  let actualArgs = args;
+  let actualOpts = options;
+  if (typeof actualArgs === 'object' && actualArgs !== null && !Array.isArray(actualArgs)) {
+    actualOpts = actualArgs;
+    actualArgs = [];
+  }
+  actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
+  const env = actualOpts.env ?? process.env;
+  checkEnv(env, file);
+  return _execFileSync(file, actualArgs ?? [], actualOpts);
 }
 
 export default {
