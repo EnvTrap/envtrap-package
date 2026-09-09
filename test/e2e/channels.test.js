@@ -7,6 +7,8 @@ const { runCli } = require('./harness.js');
 const STDOUT_APP = path.resolve(__dirname, '../fixtures/stdout-leak.js');
 const STDERR_APP = path.resolve(__dirname, '../fixtures/stderr-leak.js');
 const SUBPROCESS_APP = path.resolve(__dirname, '../fixtures/subprocess-leak.js');
+const SUBPROCESS_DEFAULT_ENV_APP = path.resolve(__dirname, '../fixtures/subprocess-default-env.js');
+const SUBPROCESS_ESM_APP = path.resolve(__dirname, '../fixtures/subprocess-esm-leak.mjs');
 const DNS_APP = path.resolve(__dirname, '../fixtures/dns-leak.js');
 
 const FAKE_SECRET = ['sk', 'live', 'verysecretpayload1234567890'].join('_');
@@ -52,6 +54,30 @@ test('Channel CHILD PROCESS: alerts on subprocess spawn attempting to inherit se
   );
 
   // Alert on child process channel
+  assert.match(stderr, /SECRET LEAK DETECTED/);
+  assert.match(stderr, /Channel:\s+CHILD PROC/);
+  assert.match(stderr, /TEST_SECRET_KEY/);
+});
+
+test('Channel CHILD PROCESS: alerts on subprocess spawn with omitted options.env (default inheritance)', async () => {
+  const { stderr } = await runCli(
+    ['run', '--no-mitm', 'node', SUBPROCESS_DEFAULT_ENV_APP],
+    { TEST_SECRET_KEY: FAKE_SECRET }
+  );
+
+  // Alert on child process channel when options.env is omitted
+  assert.match(stderr, /SECRET LEAK DETECTED/);
+  assert.match(stderr, /Channel:\s+CHILD PROC/);
+  assert.match(stderr, /TEST_SECRET_KEY/);
+});
+
+test('Channel CHILD PROCESS: alerts on ESM subprocess spawn with omitted options.env', async () => {
+  const { stderr } = await runCli(
+    ['run', '--no-mitm', 'node', SUBPROCESS_ESM_APP],
+    { TEST_SECRET_KEY: FAKE_SECRET }
+  );
+
+  // Alert on child process channel from ESM spawn
   assert.match(stderr, /SECRET LEAK DETECTED/);
   assert.match(stderr, /Channel:\s+CHILD PROC/);
   assert.match(stderr, /TEST_SECRET_KEY/);
