@@ -61,7 +61,7 @@ Here is the exact lifecycle of what happens from the moment you hit Enter:
 +-------------------------------------------------------------+
 | Phase 4: Inside Your App (The Traps are Set)                 |
 | 1. ESM Loader Hook intercepts import from 'node:dns'        |
-| 2. CJS Hook replaces require('dns') and require('child_proc')|
+| 2. CJS Hook replaces require('dns') and require('child_process')|
 | 3. Hijacks process.stdout.write & process.stderr.write      |
 | 4. process.env is wrapped in a Proxy to watch for changes   |
 +-------------------------------------------------------------+
