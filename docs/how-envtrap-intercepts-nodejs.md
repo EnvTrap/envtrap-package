@@ -47,7 +47,7 @@ Here is the exact lifecycle of what happens from the moment you hit Enter:
 | - HTTP_PROXY="http://127.0.0.1:45678"                       |
 | - HTTPS_PROXY="http://127.0.0.1:45678"                      |
 | - NODE_EXTRA_CA_CERTS="/tmp/envtrap-ca.crt"                 |
-| - __ENVTRAP_SECRETS_MAP__='{"STRIPE_KEY":"sk_live_123"}'   |
+| - __ENVTRAP_SECRETS_MAP__='{"STRIPE_KEY":"sk_test_123"}'   |
 +-------------------------------------------------------------+
                   |
                   v
