@@ -36,6 +36,16 @@ test('Hooks Shared - checkHighEntropyDns detects tunneling domains', async () =>
   // 'a8b9c1d2e3f4g5h6i7j8k9l0' has length 24 and entropy > 3.5
   assert.strictEqual(checkHighEntropyDns('a8b9c1d2e3f4g5h6i7j8k9l0.attacker.com', 3.5, 12), true);
 
+  // High entropy cloud subdomains should be bypassed by allowlist
+  assert.strictEqual(checkHighEntropyDns('d111111abcdef8a8b9c.cloudfront.net', 3.5, 12), false);
+  assert.strictEqual(checkHighEntropyDns('a1b2c3d4e5f6g7h8i9j0.execute-api.us-east-1.amazonaws.com', 3.5, 12), false);
+  assert.strictEqual(checkHighEntropyDns('shard-00-01.a8z9b1c2d3e4f5.mongodb.net', 3.5, 12), false);
+  assert.strictEqual(checkHighEntropyDns('a8b9c1d2e3f4g5h6i7j8.storage.googleapis.com', 3.5, 12), false);
+
+  // Trailing dot in FQDN cloud domain should also be bypassed
+  assert.strictEqual(checkHighEntropyDns('d111111abcdef8a8b9c.cloudfront.net.', 3.5, 12), false);
+  assert.strictEqual(checkHighEntropyDns('a1b2c3d4e5f6g7h8i9j0.execute-api.us-east-1.amazonaws.com.', 3.5, 12), false);
+
   // Invalid or empty inputs
   assert.strictEqual(checkHighEntropyDns('', 3.5, 12), false);
   assert.strictEqual(checkHighEntropyDns(null, 3.5, 12), false);
