@@ -130,12 +130,34 @@ export function shannonEntropy(str) {
 // High-entropy DNS tunneling detection
 // ---------------------------------------------------------------------------
 
+export const CLOUD_DNS_ALLOWLIST = [
+  'amazonaws.com',
+  'cloudfront.net',
+  'azure.com',
+  'azurewebsites.net',
+  'mongodb.net',
+  'googleapis.com',
+  'google.com',
+];
+
+export function isCloudDnsAllowlisted(hostname) {
+  if (typeof hostname !== 'string') return false;
+  const lower = hostname.toLowerCase();
+  for (const domain of CLOUD_DNS_ALLOWLIST) {
+    if (lower === domain || lower.endsWith('.' + domain)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Returns true if any subdomain label of specifier has suspiciously high
  * Shannon entropy (potential base64/hex DNS-tunneled payload).
  */
 export function checkHighEntropyDns(specifier, threshold, minLength) {
   if (typeof specifier !== 'string') return false;
+  if (isCloudDnsAllowlisted(specifier)) return false;
 
   for (const label of specifier.split('.')) {
     if (label.length >= minLength && shannonEntropy(label) >= threshold) {
