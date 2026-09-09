@@ -14,12 +14,15 @@ export class CertificateAuthority {
   private caKeys: forge.pki.KeyPair | null = null;
   private caCert: forge.pki.Certificate | null = null;
   private readonly domainCertCache = new Map<string, DomainCreds>();
+  private tempDir: string | null = null;
 
   /**
    * Generates a 2048-bit RSA Root CA in memory and writes only the public
    * certificate to a temp file so NODE_EXTRA_CA_CERTS can reference it.
    */
   initCA(): CaMaterials {
+    this.cleanup();
+
     const { privateKey, publicKey } = generateKeyPairSync('rsa', {
       modulusLength: 2048,
       publicKeyEncoding:  { type: 'spki',  format: 'pem' },
@@ -50,10 +53,32 @@ export class CertificateAuthority {
     this.caCert.sign(this.caKeys.privateKey as forge.pki.rsa.PrivateKey, forge.md.sha256.create());
 
     const certPem  = forge.pki.certificateToPem(this.caCert);
-    const certPath = path.join(os.tmpdir(), 'envtrap-ca.crt');
+    const tempDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'envtrap-ca-'));
+    this.tempDir   = tempDir;
+    const certPath = path.join(tempDir, 'ca.crt');
     fs.writeFileSync(certPath, certPem, { encoding: 'utf-8', mode: 0o600 });
 
+    process.once('exit', () => {
+      this.cleanup();
+    });
+
     return { certPem, certPath };
+  }
+
+  /**
+   * Removes the temporary CA certificate directory from disk if created.
+   */
+  cleanup(): void {
+    if (this.tempDir) {
+      try {
+        if (fs.existsSync(this.tempDir)) {
+          fs.rmSync(this.tempDir, { recursive: true, force: true });
+        }
+      } catch {
+        // ignore cleanup errors on shutdown
+      }
+      this.tempDir = null;
+    }
   }
 
   /**

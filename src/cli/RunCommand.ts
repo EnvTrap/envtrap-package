@@ -20,6 +20,7 @@ import { ChildProcessManager } from './ChildProcessManager.js';
 
 export class RunCommand {
   private caCertPath = '';
+  private ca: CertificateAuthority | null = null;
 
   constructor(
     private readonly config: EnvtrapConfig,
@@ -54,11 +55,28 @@ export class RunCommand {
     const pm = new ChildProcessManager(command, args, childEnv, stdio);
     const child = pm.spawn();
 
+    const onSignal = () => {
+      if (mitmEnabled && this.caCertPath) {
+        removeSystemCA(this.caCertPath);
+      }
+      if (this.ca) {
+        this.ca.cleanup();
+      }
+      process.exit(1);
+    };
+
+    process.once('SIGINT', onSignal);
+    process.once('SIGTERM', onSignal);
+
     child.on('exit', (code, signal) => {
+      process.removeListener('SIGINT', onSignal);
+      process.removeListener('SIGTERM', onSignal);
       this.handleExit(pm.isForceExited(), code, signal, mitmEnabled);
     });
 
     child.on('error', (err) => {
+      process.removeListener('SIGINT', onSignal);
+      process.removeListener('SIGTERM', onSignal);
       this.warnReporter(`Failed to spawn process: ${err.message}`);
       process.exit(1);
     });
@@ -66,6 +84,7 @@ export class RunCommand {
 
   private async bootMitm(): Promise<number> {
     const ca = new CertificateAuthority();
+    this.ca = ca;
     const materials = ca.initCA();
     this.caCertPath = materials.certPath;
     injectSystemCA(this.caCertPath, this.options.verbose);
@@ -85,6 +104,9 @@ export class RunCommand {
 
     if (mitm && this.caCertPath) {
       removeSystemCA(this.caCertPath);
+    }
+    if (this.ca) {
+      this.ca.cleanup();
     }
     process.exit(forceExit ? 1 : (code ?? (signal ? 1 : 0)));
   }
