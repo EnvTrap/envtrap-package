@@ -33,7 +33,7 @@ test('EnvSecretSource - load environment secrets', () => {
 // ============================================================================
 test('DotEnvSecretSource - load file secrets', () => {
   // Write temporary .env file
-  fs.writeFileSync(TEMP_DOTENV, 'SECRET_KEY_VAR=' + 'sk_test_' + '51NzABCDEFGHIJ123456789012\nBLOCKED_VAR=short\n');
+  fs.writeFileSync(TEMP_DOTENV, 'SECRET_KEY_VAR=' + 'sk_test_' + '51NzABCDEFGHIJ123456789012\nEXPLICIT_PASS=secret123\nBLOCKED_TINY=sh\n');
 
   try {
     const source = new DotEnvSecretSource(TEMP_DOTENV, ENTROPY_CFG);
@@ -43,8 +43,13 @@ test('DotEnvSecretSource - load file secrets', () => {
     assert.notStrictEqual(found, undefined);
     assert.strictEqual(found.value, 'sk_test_' + '51NzABCDEFGHIJ123456789012');
 
-    // The short value must be excluded in the loading phase by looksLikeSecret gate
-    const blocked = secrets.find(s => s.name === 'BLOCKED_VAR');
+    // Explicit .env secret with length 9 and lower entropy should be retained
+    const explicit = secrets.find(s => s.name === 'EXPLICIT_PASS');
+    assert.notStrictEqual(explicit, undefined);
+    assert.strictEqual(explicit.value, 'secret123');
+
+    // Values shorter than 4 characters should be excluded
+    const blocked = secrets.find(s => s.name === 'BLOCKED_TINY');
     assert.strictEqual(blocked, undefined);
   } finally {
     if (fs.existsSync(TEMP_DOTENV)) {

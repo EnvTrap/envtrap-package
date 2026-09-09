@@ -90,8 +90,12 @@ export function scanContent(
 
   const found: string[] = [];
 
-  for (const { name, value } of secrets) {
-    if (!looksLikeSecret(value, minLength, minEntropy)) continue;
+  for (const { name, value, source } of secrets) {
+    if (source === 'file') {
+      if (!value || value.trim().length < 4) continue;
+    } else {
+      if (!looksLikeSecret(value, minLength, minEntropy)) continue;
+    }
     if (content.includes(value)) found.push(name);
   }
 

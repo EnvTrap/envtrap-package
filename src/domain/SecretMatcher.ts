@@ -25,6 +25,9 @@ export class SecretMatcher {
   }
 
   private isCandidate(secret: Secret): boolean {
+    if (secret.source === 'file') {
+      return typeof secret.value === 'string' && secret.value.trim().length >= 4;
+    }
     return looksLikeSecret(secret.value, this.entropy.minLength, this.entropy.threshold);
   }
 }
