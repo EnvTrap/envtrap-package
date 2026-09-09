@@ -55,11 +55,28 @@ export class RunCommand {
     const pm = new ChildProcessManager(command, args, childEnv, stdio);
     const child = pm.spawn();
 
+    const onSignal = () => {
+      if (mitmEnabled && this.caCertPath) {
+        removeSystemCA(this.caCertPath);
+      }
+      if (this.ca) {
+        this.ca.cleanup();
+      }
+      process.exit(1);
+    };
+
+    process.once('SIGINT', onSignal);
+    process.once('SIGTERM', onSignal);
+
     child.on('exit', (code, signal) => {
+      process.removeListener('SIGINT', onSignal);
+      process.removeListener('SIGTERM', onSignal);
       this.handleExit(pm.isForceExited(), code, signal, mitmEnabled);
     });
 
     child.on('error', (err) => {
+      process.removeListener('SIGINT', onSignal);
+      process.removeListener('SIGTERM', onSignal);
       this.warnReporter(`Failed to spawn process: ${err.message}`);
       process.exit(1);
     });
