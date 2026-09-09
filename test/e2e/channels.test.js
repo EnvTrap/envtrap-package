@@ -71,6 +71,8 @@ test('Channel CHILD PROCESS: alerts on subprocess spawn with omitted options.env
   assert.match(stderr, /TEST_SECRET_KEY/);
 });
 
+const SUBPROCESS_EXECFILE_APP = path.resolve(__dirname, '../fixtures/subprocess-execfile.js');
+
 test('Channel CHILD PROCESS: alerts on ESM subprocess spawn with omitted options.env', async () => {
   const { stderr } = await runCli(
     ['run', '--no-mitm', 'node', SUBPROCESS_ESM_APP],
@@ -81,6 +83,16 @@ test('Channel CHILD PROCESS: alerts on ESM subprocess spawn with omitted options
   assert.match(stderr, /SECRET LEAK DETECTED/);
   assert.match(stderr, /Channel:\s+CHILD PROC/);
   assert.match(stderr, /TEST_SECRET_KEY/);
+});
+
+test('Channel CHILD PROCESS: execFile preserves callbacks and options objects', async () => {
+  const { stdout } = await runCli(
+    ['run', '--no-mitm', 'node', SUBPROCESS_EXECFILE_APP],
+    { TEST_SECRET_KEY: FAKE_SECRET }
+  );
+
+  assert.match(stdout, /RESULT1:ARG_CB_OK/);
+  assert.match(stdout, /RESULT2:OPT_CB_OK:HELLO/);
 });
 
 test('Channel DNS: intercepts and blocks domain query containing secret', async () => {

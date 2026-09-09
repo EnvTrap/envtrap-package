@@ -104,25 +104,28 @@ export function exec(command, options, callback) {
 }
 
 export function execFile(file, args, options, callback) {
-  let actualArgs = Array.isArray(args) ? args : [];
-  let actualOpts = options;
+  let actualArgs = [];
+  let actualOpts = {};
   let actualCb = callback;
 
-  if (typeof actualArgs === 'function') {
-    actualCb = actualArgs;
-    actualArgs = [];
-    actualOpts = {};
-  } else if (typeof actualOpts === 'function') {
-    actualCb = actualOpts;
-    if (typeof actualArgs === 'object' && actualArgs !== null && !Array.isArray(actualArgs)) {
-      actualOpts = actualArgs;
-      actualArgs = [];
-    } else {
-      actualOpts = {};
+  if (Array.isArray(args)) {
+    actualArgs = args;
+    if (typeof options === 'function') {
+      actualCb = options;
+    } else if (options && typeof options === 'object') {
+      actualOpts = options;
     }
-  } else if (typeof actualArgs === 'object' && actualArgs !== null && !Array.isArray(actualArgs)) {
-    actualOpts = actualArgs;
-    actualArgs = [];
+  } else if (typeof args === 'function') {
+    actualCb = args;
+  } else if (args && typeof args === 'object') {
+    actualOpts = args;
+    if (typeof options === 'function') {
+      actualCb = options;
+    }
+  } else if (typeof options === 'function') {
+    actualCb = options;
+  } else if (options && typeof options === 'object') {
+    actualOpts = options;
   }
 
   actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
