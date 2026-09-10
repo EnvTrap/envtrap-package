@@ -20,6 +20,7 @@ export class MitmServer {
     private readonly reporter: { warn(m: string): void; info(m: string): void },
     private readonly config: EnvtrapConfig,
     private readonly verbose: boolean,
+    private readonly maxSecretLength = 200,
   ) {}
 
   start(): Promise<number> {
@@ -41,6 +42,7 @@ export class MitmServer {
       allowedDomains,
       mode,
       this.verbose,
+      this.maxSecretLength,
     );
 
     return new Promise((resolve, reject) => {
