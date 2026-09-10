@@ -22,6 +22,7 @@ import {
 import {
   getCallerFile,
   isPathExcluded,
+  loadAndScrubSecretsMap,
 } from '__HOOKS_SHARED_URL__';
 
 export { ChildProcess } from 'node:child_process';
@@ -30,10 +31,7 @@ export { ChildProcess } from 'node:child_process';
 // Config (read once from env at module init)
 // ---------------------------------------------------------------------------
 
-const secretsMap = (() => {
-  try { return JSON.parse(process.env.__ENVTRAP_SECRETS_MAP__ || '{}'); }
-  catch { return {}; }
-})();
+const secretsMap = loadAndScrubSecretsMap();
 
 const pathExclusions = (() => {
   try { return JSON.parse(process.env.__ENVTRAP_PATH_EXCLUSIONS__ || '[]'); }

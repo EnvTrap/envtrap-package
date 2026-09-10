@@ -71,3 +71,14 @@ test('Hooks Shared - preRedact masks secrets with PATH_EXCLUDED', async () => {
   const clean = 'Clean log message';
   assert.strictEqual(preRedact(clean, secretsMap), clean);
 });
+
+test('Hooks Shared - loadAndScrubSecretsMap parses and scrubs env var (Issue #14)', async () => {
+  const { loadAndScrubSecretsMap } = await import('../../dist/hooks/shared.mjs');
+
+  const testSecrets = { TEST_API_KEY: 'sk_live_1234567890abcdef' };
+  process.env.__ENVTRAP_SECRETS_MAP__ = 'base64:' + Buffer.from(JSON.stringify(testSecrets)).toString('base64');
+
+  const parsed = loadAndScrubSecretsMap();
+  assert.deepStrictEqual(parsed, testSecrets);
+  assert.strictEqual(process.env.__ENVTRAP_SECRETS_MAP__, undefined);
+});

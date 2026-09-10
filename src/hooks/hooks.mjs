@@ -23,6 +23,7 @@ import {
   shannonEntropy,
   checkHighEntropyDns,
   preRedact,
+  loadAndScrubSecretsMap,
 } from './shared.mjs';
 
 // ---------------------------------------------------------------------------
@@ -43,10 +44,7 @@ const entropyThreshold = parseFloat(process.env.__ENVTRAP_ENTROPY_THRESHOLD__ ||
 const entropyMinLength = parseInt(process.env.__ENVTRAP_ENTROPY_MIN_LENGTH__ || '12', 10);
 
 /** Mutable — updated via MessagePort when the parent rotates secrets at runtime */
-let secretsMap = (() => {
-  try { return JSON.parse(process.env.__ENVTRAP_SECRETS_MAP__ || '{}'); }
-  catch { return {}; }
-})();
+let secretsMap = loadAndScrubSecretsMap();
 
 // ---------------------------------------------------------------------------
 // ESM Loader — initialize()
