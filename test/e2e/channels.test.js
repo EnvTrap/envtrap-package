@@ -71,6 +71,19 @@ test('Channel CHILD PROCESS: alerts on subprocess spawn with omitted options.env
   assert.match(stderr, /TEST_SECRET_KEY/);
 });
 
+const SUBPROCESS_ARGS_APP = path.resolve(__dirname, '../fixtures/subprocess-args-leak.js');
+
+test('Channel CHILD PROCESS: alerts on secret passed in command line arguments (Issue #3)', async () => {
+  const { stderr } = await runCli(
+    ['run', '--no-mitm', 'node', SUBPROCESS_ARGS_APP],
+    { TEST_SECRET_KEY: FAKE_SECRET }
+  );
+
+  assert.match(stderr, /SECRET LEAK DETECTED/);
+  assert.match(stderr, /Channel:\s+CHILD PROC/);
+  assert.match(stderr, /TEST_SECRET_KEY/);
+});
+
 const SUBPROCESS_EXECFILE_APP = path.resolve(__dirname, '../fixtures/subprocess-execfile.js');
 
 test('Channel CHILD PROCESS: alerts on ESM subprocess spawn with omitted options.env', async () => {
