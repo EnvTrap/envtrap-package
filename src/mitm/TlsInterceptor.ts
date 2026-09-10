@@ -14,6 +14,7 @@ export class TlsInterceptor {
   private readonly requestChunks: Buffer[] = [];
   private lastOverlap = '';
   private upstreamSocket: tls.TLSSocket | null = null;
+  private readonly overlapSize: number;
 
   constructor(
     private readonly scanner: IScanner,
@@ -21,7 +22,10 @@ export class TlsInterceptor {
     private readonly isAllowed: boolean,
     private readonly mode: string,
     private readonly verbose: boolean,
-  ) {}
+    maxSecretLength = 200,
+  ) {
+    this.overlapSize = Math.max(200, maxSecretLength);
+  }
 
   intercept(
     tlsSocket: tls.TLSSocket,
@@ -45,7 +49,7 @@ export class TlsInterceptor {
             this.safeDestroy(this.upstreamSocket);
             return;
           }
-          this.lastOverlap = combined.slice(-200);
+          this.lastOverlap = combined.slice(-this.overlapSize);
         }
       }
 
