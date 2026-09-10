@@ -49,8 +49,7 @@ const channelMode = (() => {
 // Core check
 // ---------------------------------------------------------------------------
 
-function checkEnv(env, command) {
-  if (!env || typeof env !== 'object') return;
+function checkChildCall(env, command, args) {
   if (channelMode === 'off') return;
 
   if (pathExclusions.length > 0) {
@@ -58,14 +57,34 @@ function checkEnv(env, command) {
     if (caller && isPathExcluded(caller, pathExclusions)) return;
   }
 
+  // 1. Check env inheritance
+  if (env && typeof env === 'object') {
+    for (const name in secretsMap) {
+      const value = secretsMap[name];
+      if (name in env && env[name] === value) {
+        process.stderr.write(
+          '[envtrap] Child process leak: secret "' + name + '" passed to: ' + command + '\n'
+        );
+        if (channelMode === 'block') {
+          throw new Error('[envtrap] child_process block: env key "' + name + '" passed to child');
+        }
+      }
+    }
+  }
+
+  // 2. Check command string and args array (Issue #3)
+  const cmdStr = typeof command === 'string' ? command : String(command || '');
+  const argStrings = Array.isArray(args) ? args.map((a) => (typeof a === 'string' ? a : String(a ?? ''))) : [];
+  const fullInvoked = [cmdStr, ...argStrings].join(' ');
+
   for (const name in secretsMap) {
     const value = secretsMap[name];
-    if (name in env && env[name] === value) {
+    if (value && value.length >= 4 && fullInvoked.includes(value)) {
       process.stderr.write(
-        '[envtrap] Child process leak: secret "' + name + '" passed to: ' + command + '\n'
+        '[envtrap] Child process leak: secret "' + name + '" passed in arguments to: ' + cmdStr + '\n'
       );
       if (channelMode === 'block') {
-        throw new Error('[envtrap] child_process block: env key "' + name + '" passed to child');
+        throw new Error('[envtrap] child_process block: secret "' + name + '" found in arguments to ' + cmdStr);
       }
     }
   }
@@ -84,7 +103,7 @@ export function spawn(command, args, options) {
   }
   actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
   const env = actualOpts.env ?? process.env;
-  checkEnv(env, command);
+  checkChildCall(env, command, actualArgs);
   return _spawn(command, actualArgs ?? [], actualOpts);
 }
 
@@ -98,7 +117,7 @@ export function exec(command, options, callback) {
     actualOpts = {};
   }
   const env = actualOpts.env ?? process.env;
-  checkEnv(env, command);
+  checkChildCall(env, command, []);
   if (typeof actualCb === 'function') {
     return _exec(command, actualOpts, actualCb);
   }
@@ -132,7 +151,7 @@ export function execFile(file, args, options, callback) {
 
   actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
   const env = actualOpts.env ?? process.env;
-  checkEnv(env, file);
+  checkChildCall(env, file, actualArgs);
 
   if (typeof actualCb === 'function') {
     return _execFile(file, actualArgs, actualOpts, actualCb);
@@ -149,7 +168,7 @@ export function fork(modulePath, args, options) {
   }
   actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
   const env = actualOpts.env ?? process.env;
-  checkEnv(env, modulePath);
+  checkChildCall(env, modulePath, actualArgs);
   return _fork(modulePath, actualArgs ?? [], actualOpts);
 }
 
@@ -162,14 +181,14 @@ export function spawnSync(command, args, options) {
   }
   actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
   const env = actualOpts.env ?? process.env;
-  checkEnv(env, command);
+  checkChildCall(env, command, actualArgs);
   return _spawnSync(command, actualArgs ?? [], actualOpts);
 }
 
 export function execSync(command, options) {
   const actualOpts = options && typeof options === 'object' ? options : {};
   const env = actualOpts.env ?? process.env;
-  checkEnv(env, command);
+  checkChildCall(env, command, []);
   return _execSync(command, actualOpts);
 }
 
@@ -182,7 +201,7 @@ export function execFileSync(file, args, options) {
   }
   actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
   const env = actualOpts.env ?? process.env;
-  checkEnv(env, file);
+  checkChildCall(env, file, actualArgs);
   return _execFileSync(file, actualArgs ?? [], actualOpts);
 }
 

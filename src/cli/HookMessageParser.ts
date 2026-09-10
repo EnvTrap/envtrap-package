@@ -14,6 +14,14 @@ export interface HookMessage {
 export class HookMessageParser {
   parse(line: string): HookMessage {
     if (line.includes('[envtrap] Child process leak:')) {
+      const matchArgs = /secret "([^"]+)" passed in arguments to: (.+)/.exec(line);
+      if (matchArgs) {
+        return {
+          type: 'child_process_leak',
+          secretName: matchArgs[1],
+          detail: matchArgs[2],
+        };
+      }
       const match = /secret "([^"]+)" passed to: (.+)/.exec(line);
       if (match) {
         return {
