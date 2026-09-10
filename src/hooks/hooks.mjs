@@ -23,6 +23,7 @@ import {
   shannonEntropy,
   checkHighEntropyDns,
   preRedact,
+  loadAndScrubSecretsMap,
 } from './shared.mjs';
 
 // ---------------------------------------------------------------------------
@@ -43,10 +44,7 @@ const entropyThreshold = parseFloat(process.env.__ENVTRAP_ENTROPY_THRESHOLD__ ||
 const entropyMinLength = parseInt(process.env.__ENVTRAP_ENTROPY_MIN_LENGTH__ || '12', 10);
 
 /** Mutable — updated via MessagePort when the parent rotates secrets at runtime */
-let secretsMap = (() => {
-  try { return JSON.parse(process.env.__ENVTRAP_SECRETS_MAP__ || '{}'); }
-  catch { return {}; }
-})();
+let secretsMap = loadAndScrubSecretsMap();
 
 // ---------------------------------------------------------------------------
 // ESM Loader — initialize()
@@ -65,7 +63,7 @@ export function initialize(data) {
 }
 
 // ---------------------------------------------------------------------------
-// CJS Interception — child_process wrapper
+// CJS Interception — child_process wrapper (Issue #3 & Issue #14)
 // ---------------------------------------------------------------------------
 
 function reportChildLeak(name, command) {
@@ -74,8 +72,7 @@ function reportChildLeak(name, command) {
   );
 }
 
-function checkChildEnv(env, command) {
-  if (!env || typeof env !== 'object') return;
+function checkChildCall(env, command, args) {
   const mode = configModes.child_process || 'warn';
   if (mode === 'off') return;
 
@@ -84,12 +81,32 @@ function checkChildEnv(env, command) {
     if (caller && isPathExcluded(caller, pathExclusions)) return;
   }
 
+  // 1. Check env inheritance
+  if (env && typeof env === 'object') {
+    for (const name in secretsMap) {
+      const value = secretsMap[name];
+      if (name in env && env[name] === value) {
+        reportChildLeak(name, command);
+        if (mode === 'block') {
+          throw new Error('[envtrap] child_process block: env key "' + name + '" passed to child');
+        }
+      }
+    }
+  }
+
+  // 2. Check command string and args array (Issue #3)
+  const cmdStr = typeof command === 'string' ? command : String(command || '');
+  const argStrings = Array.isArray(args) ? args.map((a) => (typeof a === 'string' ? a : String(a ?? ''))) : [];
+  const fullInvoked = [cmdStr, ...argStrings].join(' ');
+
   for (const name in secretsMap) {
     const value = secretsMap[name];
-    if (name in env && env[name] === value) {
-      reportChildLeak(name, command);
+    if (value && value.length >= 4 && fullInvoked.includes(value)) {
+      process.stderr.write(
+        '[envtrap] Child process leak: secret "' + name + '" passed in arguments to: ' + cmdStr + '\n'
+      );
       if (mode === 'block') {
-        throw new Error('[envtrap] child_process block: env key "' + name + '" passed to child');
+        throw new Error('[envtrap] child_process block: secret "' + name + '" found in arguments to ' + cmdStr);
       }
     }
   }
@@ -107,7 +124,7 @@ function wrapChildProcess(real) {
     }
     actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
     const env = actualOpts.env ?? process.env;
-    checkChildEnv(env, command);
+    checkChildCall(env, command, actualArgs);
     return real.spawn(command, actualArgs ?? [], actualOpts);
   };
 
@@ -120,7 +137,7 @@ function wrapChildProcess(real) {
     }
     actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
     const env = actualOpts.env ?? process.env;
-    checkChildEnv(env, command);
+    checkChildCall(env, command, actualArgs);
     return real.spawnSync(command, actualArgs ?? [], actualOpts);
   };
 
@@ -134,7 +151,7 @@ function wrapChildProcess(real) {
       actualOpts = {};
     }
     const env = actualOpts.env ?? process.env;
-    checkChildEnv(env, command);
+    checkChildCall(env, command, []);
     if (typeof actualCb === 'function') {
       return real.exec(command, actualOpts, actualCb);
     }
@@ -144,7 +161,7 @@ function wrapChildProcess(real) {
   w.execSync = (command, options) => {
     const actualOpts = options && typeof options === 'object' ? options : {};
     const env = actualOpts.env ?? process.env;
-    checkChildEnv(env, command);
+    checkChildCall(env, command, []);
     return real.execSync(command, actualOpts);
   };
 
@@ -174,7 +191,7 @@ function wrapChildProcess(real) {
     }
 
     const env = actualOpts.env ?? process.env;
-    checkChildEnv(env, file);
+    checkChildCall(env, file, actualArgs);
 
     if (typeof actualCb === 'function') {
       return real.execFile(file, actualArgs, actualOpts, actualCb);
@@ -191,7 +208,7 @@ function wrapChildProcess(real) {
     }
     actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
     const env = actualOpts.env ?? process.env;
-    checkChildEnv(env, file);
+    checkChildCall(env, file, actualArgs);
     return real.execFileSync(file, actualArgs ?? [], actualOpts);
   };
 
@@ -204,7 +221,7 @@ function wrapChildProcess(real) {
     }
     actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
     const env = actualOpts.env ?? process.env;
-    checkChildEnv(env, modulePath);
+    checkChildCall(env, modulePath, actualArgs);
     return real.fork(modulePath, actualArgs ?? [], actualOpts);
   };
 

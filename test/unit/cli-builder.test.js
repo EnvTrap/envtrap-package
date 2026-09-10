@@ -29,7 +29,9 @@ test('ChildEnvBuilder - builds environment with MITM enabled', () => {
   assert.match(env.NO_PROXY, /localhost/);
 
   // Injected serialization metadata
-  const secretsMap = JSON.parse(env.__ENVTRAP_SECRETS_MAP__);
+  assert.ok(env.__ENVTRAP_SECRETS_MAP__.startsWith('base64:'));
+  const rawJson = Buffer.from(env.__ENVTRAP_SECRETS_MAP__.slice(7), 'base64').toString('utf-8');
+  const secretsMap = JSON.parse(rawJson);
   assert.strictEqual(secretsMap['STRIPE_KEY'], fakeStripe);
 
   const names = JSON.parse(env.__ENVTRAP_SECRET_NAMES__);
@@ -80,6 +82,11 @@ test('HookMessageParser - parses child process leak protocols', () => {
   assert.strictEqual(msg.type, 'child_process_leak');
   assert.strictEqual(msg.secretName, 'MY_TOKEN');
   assert.strictEqual(msg.detail, '/bin/bash');
+
+  const msgArgs = parser.parse('[envtrap] Child process leak: secret "MY_TOKEN" passed in arguments to: curl https://example.com');
+  assert.strictEqual(msgArgs.type, 'child_process_leak');
+  assert.strictEqual(msgArgs.secretName, 'MY_TOKEN');
+  assert.strictEqual(msgArgs.detail, 'curl https://example.com');
 });
 
 test('HookMessageParser - parses DNS leak and warning protocols', () => {

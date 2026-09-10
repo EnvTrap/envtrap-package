@@ -34,6 +34,11 @@ export class MitmServer {
       this.verbose,
     );
 
+    const maxSecretLength = Math.max(
+      200,
+      ...(this.config.entropy?.minLength ? [this.config.entropy.minLength] : []),
+    );
+
     const connectHandler = new ConnectHandler(
       this.ca,
       this.scanner,
@@ -41,6 +46,7 @@ export class MitmServer {
       allowedDomains,
       mode,
       this.verbose,
+      maxSecretLength,
     );
 
     return new Promise((resolve, reject) => {

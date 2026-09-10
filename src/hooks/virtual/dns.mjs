@@ -14,6 +14,7 @@ import {
   isPathExcluded,
   shannonEntropy,
   checkHighEntropyDns,
+  loadAndScrubSecretsMap,
 } from '__HOOKS_SHARED_URL__';
 
 export * from 'node:dns';
@@ -22,10 +23,7 @@ export * from 'node:dns';
 // Config (read once from env at module init)
 // ---------------------------------------------------------------------------
 
-const secretsMap = (() => {
-  try { return JSON.parse(process.env.__ENVTRAP_SECRETS_MAP__ || '{}'); }
-  catch { return {}; }
-})();
+const secretsMap = loadAndScrubSecretsMap();
 
 const pathExclusions = (() => {
   try { return JSON.parse(process.env.__ENVTRAP_PATH_EXCLUSIONS__ || '[]'); }
