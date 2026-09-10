@@ -69,6 +69,40 @@ test('SecretMatcher - findIn operations', () => {
   assert.strictEqual(matcher2.findIn('text containing short key').length, 0);
 });
 
+test('SecretMatcher - detects encoded secrets (Base64, Hex, URL-encoded, JSON-escaped) (Issue #5)', () => {
+  const secret = { name: 'API_TOKEN', value: 'SuperSecretToken12345!', source: 'env' };
+  const matcher = new SecretMatcher([secret], ENTROPY_CFG);
+
+  // Verbatim
+  assert.strictEqual(matcher.findIn('payload: SuperSecretToken12345!').length, 1);
+
+  // Standard Base64
+  const b64 = Buffer.from('SuperSecretToken12345!').toString('base64');
+  const b64Matches = matcher.findIn(`Authorization: Basic ${b64}`);
+  assert.strictEqual(b64Matches.length, 1);
+  assert.strictEqual(b64Matches[0].name, 'API_TOKEN');
+
+  // Hex encoded
+  const hex = Buffer.from('SuperSecretToken12345!').toString('hex');
+  const hexMatches = matcher.findIn(`data: ${hex}`);
+  assert.strictEqual(hexMatches.length, 1);
+  assert.strictEqual(hexMatches[0].name, 'API_TOKEN');
+
+  // URL encoded
+  const urlEnc = encodeURIComponent('SuperSecretToken12345!');
+  const urlMatches = matcher.findIn(`https://example.com/api?token=${urlEnc}`);
+  assert.strictEqual(urlMatches.length, 1);
+  assert.strictEqual(urlMatches[0].name, 'API_TOKEN');
+
+  // JSON escaped secret
+  const secretWithSpecial = { name: 'SPECIAL_SECRET', value: 'secret"with\\special\nchars', source: 'env' };
+  const matcherSpecial = new SecretMatcher([secretWithSpecial], { minLength: 6, threshold: 2.0 });
+  const jsonEscaped = JSON.stringify('secret"with\\special\nchars').slice(1, -1);
+  const jsonMatches = matcherSpecial.findIn(`{"data":"${jsonEscaped}"}`);
+  assert.strictEqual(jsonMatches.length, 1);
+  assert.strictEqual(jsonMatches[0].name, 'SPECIAL_SECRET');
+});
+
 test('SecretMatcher - findMatchingKeys environment mapping', () => {
   const secret1 = { name: 'DB_PASS', value: 'pass123456789', source: 'env' };
   const secret2 = { name: 'API_KEY', value: 'key1234567890', source: 'env' };
