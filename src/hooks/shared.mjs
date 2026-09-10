@@ -195,3 +195,56 @@ export function preRedact(chunk, secretsMap) {
     ? (typeof chunk === 'string' ? str : Buffer.from(str, 'utf-8'))
     : chunk;
 }
+
+// ---------------------------------------------------------------------------
+// Secure Secret Map Decryption & Scrubbing (Issue #14)
+// ---------------------------------------------------------------------------
+
+let _cachedSecretsMap = null;
+
+/**
+ * Loads secrets map from process.env.__ENVTRAP_SECRETS_MAP__ and immediately
+ * removes the environment variable from process.env to prevent inspection.
+ * Supports both base64-encoded strings and plaintext JSON for backwards compatibility.
+ */
+export function loadAndScrubSecretsMap() {
+  if (_cachedSecretsMap !== null) {
+    return _cachedSecretsMap;
+  }
+
+  const raw = process.env.__ENVTRAP_SECRETS_MAP__;
+  if (!raw) {
+    _cachedSecretsMap = {};
+    return _cachedSecretsMap;
+  }
+
+  try {
+    delete process.env.__ENVTRAP_SECRETS_MAP__;
+  } catch { /* ignore */ }
+
+  if (raw.startsWith('base64:')) {
+    try {
+      const decoded = Buffer.from(raw.slice(7), 'base64').toString('utf-8');
+      _cachedSecretsMap = JSON.parse(decoded);
+      return _cachedSecretsMap;
+    } catch {
+      _cachedSecretsMap = {};
+      return _cachedSecretsMap;
+    }
+  }
+
+  try {
+    _cachedSecretsMap = JSON.parse(raw);
+    return _cachedSecretsMap;
+  } catch {
+    try {
+      const decoded = Buffer.from(raw, 'base64').toString('utf-8');
+      _cachedSecretsMap = JSON.parse(decoded);
+      return _cachedSecretsMap;
+    } catch {
+      _cachedSecretsMap = {};
+      return _cachedSecretsMap;
+    }
+  }
+}
+
