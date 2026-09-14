@@ -29,7 +29,9 @@ test('ChildEnvBuilder - builds environment with MITM enabled', () => {
   assert.match(env.NO_PROXY, /localhost/);
 
   // Injected serialization metadata
-  const secretsMap = JSON.parse(env.__ENVTRAP_SECRETS_MAP__);
+  assert.ok(env.__ENVTRAP_SECRETS_MAP__.startsWith('base64:'));
+  const rawJson = Buffer.from(env.__ENVTRAP_SECRETS_MAP__.slice(7), 'base64').toString('utf-8');
+  const secretsMap = JSON.parse(rawJson);
   assert.strictEqual(secretsMap['STRIPE_KEY'], fakeStripe);
 
   const names = JSON.parse(env.__ENVTRAP_SECRET_NAMES__);

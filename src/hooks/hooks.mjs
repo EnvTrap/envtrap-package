@@ -23,6 +23,8 @@ import {
   shannonEntropy,
   checkHighEntropyDns,
   preRedact,
+  loadAndScrubSecretsMap,
+  getSerializedSecretsMap,
 } from './shared.mjs';
 
 // ---------------------------------------------------------------------------
@@ -43,10 +45,7 @@ const entropyThreshold = parseFloat(process.env.__ENVTRAP_ENTROPY_THRESHOLD__ ||
 const entropyMinLength = parseInt(process.env.__ENVTRAP_ENTROPY_MIN_LENGTH__ || '12', 10);
 
 /** Mutable — updated via MessagePort when the parent rotates secrets at runtime */
-let secretsMap = (() => {
-  try { return JSON.parse(process.env.__ENVTRAP_SECRETS_MAP__ || '{}'); }
-  catch { return {}; }
-})();
+let secretsMap = loadAndScrubSecretsMap();
 
 // ---------------------------------------------------------------------------
 // ESM Loader — initialize()
@@ -129,6 +128,19 @@ function checkChildCall(env, command, args) {
   }
 }
 
+function isNodeCommand(cmd) {
+  if (!cmd || typeof cmd !== 'string') return false;
+  return cmd === process.execPath || /(?:^|[/\\])node(?:\.exe)?$/i.test(cmd);
+}
+
+function injectGrandchildEnv(actualOpts, isNode) {
+  if (!isNode) return;
+  const serialized = getSerializedSecretsMap();
+  if (!serialized) return;
+  const currentEnv = actualOpts.env ?? process.env;
+  actualOpts.env = { ...currentEnv, __ENVTRAP_SECRETS_MAP__: serialized };
+}
+
 function wrapChildProcess(real) {
   const w = { ...real };
 
@@ -142,6 +154,7 @@ function wrapChildProcess(real) {
     actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
     const env = actualOpts.env ?? process.env;
     checkChildCall(env, command, actualArgs);
+    injectGrandchildEnv(actualOpts, isNodeCommand(command));
     return real.spawn(command, actualArgs ?? [], actualOpts);
   };
 
@@ -155,6 +168,7 @@ function wrapChildProcess(real) {
     actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
     const env = actualOpts.env ?? process.env;
     checkChildCall(env, command, actualArgs);
+    injectGrandchildEnv(actualOpts, isNodeCommand(command));
     return real.spawnSync(command, actualArgs ?? [], actualOpts);
   };
 
@@ -209,6 +223,7 @@ function wrapChildProcess(real) {
 
     const env = actualOpts.env ?? process.env;
     checkChildCall(env, file, actualArgs);
+    injectGrandchildEnv(actualOpts, isNodeCommand(file));
 
     if (typeof actualCb === 'function') {
       return real.execFile(file, actualArgs, actualOpts, actualCb);
@@ -226,6 +241,7 @@ function wrapChildProcess(real) {
     actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
     const env = actualOpts.env ?? process.env;
     checkChildCall(env, file, actualArgs);
+    injectGrandchildEnv(actualOpts, isNodeCommand(file));
     return real.execFileSync(file, actualArgs ?? [], actualOpts);
   };
 
@@ -239,6 +255,7 @@ function wrapChildProcess(real) {
     actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
     const env = actualOpts.env ?? process.env;
     checkChildCall(env, modulePath, actualArgs);
+    injectGrandchildEnv(actualOpts, true);
     return real.fork(modulePath, actualArgs ?? [], actualOpts);
   };
 

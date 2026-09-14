@@ -195,3 +195,81 @@ export function preRedact(chunk, secretsMap) {
     ? (typeof chunk === 'string' ? str : Buffer.from(str, 'utf-8'))
     : chunk;
 }
+
+// ---------------------------------------------------------------------------
+// Secure Secret Map Decryption & Scrubbing (Issue #14)
+// ---------------------------------------------------------------------------
+
+let _cachedSecretsMap = null;
+let _rawEncodedSecretsMap = null;
+
+function safeParseDict(jsonStr) {
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (parsed && typeof parsed === 'object') {
+      return Object.freeze(Object.assign(Object.create(null), parsed));
+    }
+    return Object.freeze(Object.create(null));
+  } catch {
+    return Object.freeze(Object.create(null));
+  }
+}
+
+/**
+ * Returns the serialized base64 secrets map representation so it can be
+ * passed specifically to child Node.js processes for grandchild protection.
+ */
+export function getSerializedSecretsMap() {
+  return _rawEncodedSecretsMap;
+}
+
+/**
+ * Loads secrets map from process.env.__ENVTRAP_SECRETS_MAP__ and immediately
+ * removes the environment variable (and __ENVTRAP_SECRET_NAMES__) from process.env to prevent inspection.
+ * Supports both base64-encoded strings and plaintext JSON for backwards compatibility.
+ */
+export function loadAndScrubSecretsMap() {
+  if (_cachedSecretsMap !== null) {
+    return _cachedSecretsMap;
+  }
+
+  const raw = process.env.__ENVTRAP_SECRETS_MAP__;
+  if (!raw) {
+    _cachedSecretsMap = Object.freeze(Object.create(null));
+    return _cachedSecretsMap;
+  }
+
+  try {
+    delete process.env.__ENVTRAP_SECRETS_MAP__;
+    delete process.env.__ENVTRAP_SECRET_NAMES__;
+  } catch { /* ignore */ }
+
+  if (raw.startsWith('base64:')) {
+    _rawEncodedSecretsMap = raw;
+    try {
+      const decoded = Buffer.from(raw.slice(7), 'base64').toString('utf-8');
+      _cachedSecretsMap = safeParseDict(decoded);
+      return _cachedSecretsMap;
+    } catch {
+      _cachedSecretsMap = Object.freeze(Object.create(null));
+      return _cachedSecretsMap;
+    }
+  }
+
+  try {
+    _cachedSecretsMap = safeParseDict(raw);
+    _rawEncodedSecretsMap = 'base64:' + Buffer.from(raw, 'utf-8').toString('base64');
+    return _cachedSecretsMap;
+  } catch {
+    try {
+      const decoded = Buffer.from(raw, 'base64').toString('utf-8');
+      _cachedSecretsMap = safeParseDict(decoded);
+      _rawEncodedSecretsMap = 'base64:' + raw;
+      return _cachedSecretsMap;
+    } catch {
+      _cachedSecretsMap = Object.freeze(Object.create(null));
+      return _cachedSecretsMap;
+    }
+  }
+}
+
