@@ -94,6 +94,20 @@ test('SecretMatcher - detects encoded secrets (Base64, Hex, URL-encoded, JSON-es
   assert.strictEqual(urlMatches.length, 1);
   assert.strictEqual(urlMatches[0].name, 'API_TOKEN');
 
+  // URL encoded with lowercase hex escapes (Issue #5 edge case)
+  const lowerUrlEnc = urlEnc.replace(/%[0-9A-Fa-f]{2}/g, (m) => m.toLowerCase());
+  const lowerUrlMatches = matcher.findIn(`https://example.com/api?token=${lowerUrlEnc}`);
+  assert.strictEqual(lowerUrlMatches.length, 1);
+  assert.strictEqual(lowerUrlMatches[0].name, 'API_TOKEN');
+
+  // Unpadded standard Base64 (Issue #5 edge case)
+  const secretNeedsPad = { name: 'PADDED_SECRET', value: '1234567890abc', source: 'env' }; // length 13 -> b64 has '==' padding
+  const matcherPad = new SecretMatcher([secretNeedsPad], ENTROPY_CFG);
+  const unpaddedB64 = Buffer.from('1234567890abc').toString('base64').replace(/=+$/, '');
+  const padMatches = matcherPad.findIn(`raw: ${unpaddedB64}`);
+  assert.strictEqual(padMatches.length, 1);
+  assert.strictEqual(padMatches[0].name, 'PADDED_SECRET');
+
   // JSON escaped secret
   const secretWithSpecial = { name: 'SPECIAL_SECRET', value: 'secret"with\\special\nchars', source: 'env' };
   const matcherSpecial = new SecretMatcher([secretWithSpecial], { minLength: 6, threshold: 2.0 });
@@ -101,6 +115,14 @@ test('SecretMatcher - detects encoded secrets (Base64, Hex, URL-encoded, JSON-es
   const jsonMatches = matcherSpecial.findIn(`{"data":"${jsonEscaped}"}`);
   assert.strictEqual(jsonMatches.length, 1);
   assert.strictEqual(jsonMatches[0].name, 'SPECIAL_SECRET');
+
+  // JSON escaped forward slashes (e.g. PHP/Rails\/Go serializers) (Issue #5 edge case)
+  const secretWithSlash = { name: 'SLASH_TOKEN', value: 'ghp_abc/def+123456789', source: 'env' };
+  const matcherSlash = new SecretMatcher([secretWithSlash], ENTROPY_CFG);
+  const slashedJson = 'ghp_abc\\/def+123456789';
+  const slashMatches = matcherSlash.findIn(`{"token":"${slashedJson}"}`);
+  assert.strictEqual(slashMatches.length, 1);
+  assert.strictEqual(slashMatches[0].name, 'SLASH_TOKEN');
 });
 
 test('SecretMatcher - findMatchingKeys environment mapping', () => {

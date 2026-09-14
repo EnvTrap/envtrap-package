@@ -14,6 +14,7 @@ interface VariantEntry {
 export class SecretMatcher {
   private readonly variants: VariantEntry[] = [];
   private readonly entropy: EntropyConfig;
+  private readonly minVariantLength: number;
 
   constructor(
     private readonly secrets: readonly Secret[],
@@ -21,6 +22,9 @@ export class SecretMatcher {
   ) {
     this.entropy = entropy ?? DEFAULT_CONFIG.entropy;
     this.indexEncodedVariants();
+    this.minVariantLength = this.variants.length > 0
+      ? Math.min(...this.variants.map((v) => v.pattern.length))
+      : Infinity;
   }
 
   /** Returns every secret whose verbatim value or encoded representation appears in content. */
@@ -37,9 +41,11 @@ export class SecretMatcher {
     }
 
     // 2. Encoded representation inclusion (Base64, URL-encode, Hex, JSON-escaped)
-    for (const { pattern, secret } of this.variants) {
-      if (content.includes(pattern)) {
-        matchedSecrets.add(secret);
+    if (content.length >= this.minVariantLength) {
+      for (const { pattern, secret } of this.variants) {
+        if (content.includes(pattern)) {
+          matchedSecrets.add(secret);
+        }
       }
     }
 
@@ -61,25 +67,38 @@ export class SecretMatcher {
   }
 
   private indexEncodedVariants(): void {
+    const minLen = Math.max(6, this.entropy.minLength);
+    const seenPatterns = new Set<string>();
+
     for (const s of this.secrets) {
       if (!this.isCandidate(s)) continue;
       const val = s.value;
-      if (val.length < 6) continue;
+      if (val.length < minLen) continue;
 
       const candidates = new Set<string>();
 
-      // Base64 standard & URL-safe
+      // Base64 standard & URL-safe & unpadded
       try {
         const b64 = Buffer.from(val, 'utf-8').toString('base64');
-        if (b64 && b64 !== val) candidates.add(b64);
+        if (b64 && b64 !== val) {
+          candidates.add(b64);
+          const unpadded = b64.replace(/=+$/, '');
+          if (unpadded && unpadded !== val) candidates.add(unpadded);
+        }
         const b64url = b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
         if (b64url && b64url !== val) candidates.add(b64url);
       } catch { /* ignore */ }
 
-      // URL-encoded
+      // URL-encoded (uppercase and lowercase percent-escapes)
       try {
         const urlEnc = encodeURIComponent(val);
-        if (urlEnc && urlEnc !== val) candidates.add(urlEnc);
+        if (urlEnc && urlEnc !== val) {
+          candidates.add(urlEnc);
+          const lowerHex = urlEnc.replace(/%[0-9A-Fa-f]{2}/g, (m) => m.toLowerCase());
+          if (lowerHex !== val) candidates.add(lowerHex);
+          const upperHex = urlEnc.replace(/%[0-9A-Fa-f]{2}/g, (m) => m.toUpperCase());
+          if (upperHex !== val) candidates.add(upperHex);
+        }
       } catch { /* ignore */ }
 
       // Hex encoded
@@ -91,15 +110,29 @@ export class SecretMatcher {
         }
       } catch { /* ignore */ }
 
-      // JSON stringified
+      // JSON stringified (standard & escaped forward slashes)
       try {
         const jsonStr = JSON.stringify(val);
         const innerJson = jsonStr.slice(1, -1);
-        if (innerJson && innerJson !== val) candidates.add(innerJson);
+        if (innerJson && innerJson !== val) {
+          candidates.add(innerJson);
+        }
+        if (val.includes('/')) {
+          candidates.add(val.replace(/\//g, '\\/'));
+        }
+        if (innerJson && innerJson.includes('/')) {
+          candidates.add(innerJson.replace(/\//g, '\\/'));
+        }
       } catch { /* ignore */ }
 
       for (const pattern of candidates) {
-        this.variants.push({ pattern, secret: s });
+        if (pattern.length >= 4) {
+          const dedupeKey = `${pattern}:${s.name}`;
+          if (!seenPatterns.has(dedupeKey)) {
+            seenPatterns.add(dedupeKey);
+            this.variants.push({ pattern, secret: s });
+          }
+        }
       }
     }
   }
