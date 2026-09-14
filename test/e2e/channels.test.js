@@ -82,6 +82,8 @@ test('Channel CHILD PROCESS: alerts on secret passed in command line arguments (
   assert.match(stderr, /SECRET LEAK DETECTED/);
   assert.match(stderr, /Channel:\s+CHILD PROC/);
   assert.match(stderr, /TEST_SECRET_KEY/);
+  // Verify plaintext secret was redacted and not printed to stderr
+  assert.strictEqual(stderr.includes(FAKE_SECRET), false);
 });
 
 const SUBPROCESS_EXECFILE_APP = path.resolve(__dirname, '../fixtures/subprocess-execfile.js');

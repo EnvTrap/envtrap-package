@@ -68,9 +68,15 @@ export function initialize(data) {
 // CJS Interception — child_process wrapper
 // ---------------------------------------------------------------------------
 
+function sanitizeCmd(cmdStr, secretValue) {
+  const singleLine = String(cmdStr || '').replace(/\r?\n/g, ' ');
+  if (!secretValue) return singleLine;
+  return singleLine.replaceAll ? singleLine.replaceAll(secretValue, '[REDACTED]') : singleLine.split(secretValue).join('[REDACTED]');
+}
+
 function reportChildLeak(name, command) {
   process.stderr.write(
-    '[envtrap] Child process leak: secret "' + name + '" passed to: ' + command + '\n'
+    '[envtrap] Child process leak: secret "' + name + '" passed to: ' + sanitizeCmd(command) + '\n'
   );
 }
 
@@ -98,17 +104,26 @@ function checkChildCall(env, command, args) {
 
   // 2. Check command string and args array (Issue #3)
   const cmdStr = typeof command === 'string' ? command : String(command || '');
-  const argStrings = Array.isArray(args) ? args.map((a) => (typeof a === 'string' ? a : String(a ?? ''))) : [];
+  const argStrings = Array.isArray(args)
+    ? args.map((a) => (Buffer.isBuffer(a) ? a.toString('utf-8') : (typeof a === 'string' ? a : String(a ?? ''))))
+    : [];
   const fullInvoked = [cmdStr, ...argStrings].join(' ');
 
   for (const name in secretsMap) {
     const value = secretsMap[name];
-    if (value && value.length >= 4 && fullInvoked.includes(value)) {
-      process.stderr.write(
-        '[envtrap] Child process leak: secret "' + name + '" passed in arguments to: ' + cmdStr + '\n'
-      );
-      if (mode === 'block') {
-        throw new Error('[envtrap] child_process block: secret "' + name + '" found in arguments to ' + cmdStr);
+    if (value && value.length >= 4) {
+      const foundInCmd = cmdStr.includes(value);
+      const foundInArgs = argStrings.some((a) => a.includes(value));
+      const foundInFull = fullInvoked.includes(value);
+
+      if (foundInCmd || foundInArgs || foundInFull) {
+        const safeCmd = sanitizeCmd(cmdStr, value);
+        process.stderr.write(
+          '[envtrap] Child process leak: secret "' + name + '" passed in arguments to: ' + safeCmd + '\n'
+        );
+        if (mode === 'block') {
+          throw new Error('[envtrap] child_process block: secret "' + name + '" found in arguments to ' + safeCmd);
+        }
       }
     }
   }

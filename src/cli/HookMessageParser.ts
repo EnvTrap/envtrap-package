@@ -3,7 +3,7 @@
 //
 // Single responsibility: Protocol string parsing and classification.
 
-export type HookMessageType = 'child_process_leak' | 'dns_leak' | 'dns_warning' | 'none';
+export type HookMessageType = 'child_process_leak' | 'child_process_args_leak' | 'dns_leak' | 'dns_warning' | 'none';
 
 export interface HookMessage {
   type: HookMessageType;
@@ -17,7 +17,7 @@ export class HookMessageParser {
       const matchArgs = /secret "([^"]+)" passed in arguments to: (.+)/.exec(line);
       if (matchArgs) {
         return {
-          type: 'child_process_leak',
+          type: 'child_process_args_leak',
           secretName: matchArgs[1],
           detail: matchArgs[2],
         };
