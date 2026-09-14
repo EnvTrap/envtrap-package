@@ -9,13 +9,18 @@ import { UpstreamConnector } from './UpstreamConnector.js';
 
 const MAX_BUFFER_BYTES = 1_048_576; // 1 MB
 
+const HTTP_METHOD_PREFIXES = ['GET ', 'POST ', 'PUT ', 'DELETE ', 'HEAD ', 'OPTIONS ', 'PATCH ', 'TRACE ', 'CONNECT '];
+
 export class TlsInterceptor {
   private totalBytes = 0;
   private readonly requestChunks: Buffer[] = [];
   private headersFlushed = false;
+  private isHttpChecked = false;
+  private isHttp = true;
   private headerBuffer = Buffer.alloc(0);
   private lastOverlap = '';
   private upstreamSocket: tls.TLSSocket | null = null;
+  private readonly overlapSize: number;
 
   constructor(
     private readonly scanner: IScanner,
@@ -23,7 +28,10 @@ export class TlsInterceptor {
     private readonly isAllowed: boolean,
     private readonly mode: string,
     private readonly verbose: boolean,
-  ) {}
+    maxSecretLength = 200,
+  ) {
+    this.overlapSize = Math.min(8192, Math.max(200, maxSecretLength));
+  }
 
   intercept(
     tlsSocket: tls.TLSSocket,
@@ -68,7 +76,7 @@ export class TlsInterceptor {
             this.safeDestroy(this.upstreamSocket);
             return;
           }
-          this.lastOverlap = combined.slice(-200);
+          this.lastOverlap = combined.slice(-this.overlapSize);
         }
       }
 
@@ -76,11 +84,30 @@ export class TlsInterceptor {
       // until \r\n\r\n delimiter is received and scanned before forwarding upstream.
       if (!this.headersFlushed) {
         this.headerBuffer = Buffer.concat([this.headerBuffer, chunk]);
+
+        // Protocol check: If initial bytes are not an HTTP method, don't stall non-HTTP traffic
+        if (!this.isHttpChecked && this.headerBuffer.length >= 4) {
+          this.isHttpChecked = true;
+          const prefix = this.headerBuffer.toString('utf-8', 0, Math.min(this.headerBuffer.length, 10));
+          this.isHttp = HTTP_METHOD_PREFIXES.some((m) => prefix.startsWith(m));
+          if (!this.isHttp) {
+            // Non-HTTP raw TLS traffic: bypass \r\n\r\n gating
+            this.headersFlushed = true;
+            const up = ensureUpstream();
+            if (up && !up.destroyed) {
+              up.write(this.headerBuffer);
+              this.headerBuffer = Buffer.alloc(0);
+            }
+            return;
+          }
+        }
+
         const headerIndex = this.headerBuffer.indexOf('\r\n\r\n');
         if (headerIndex !== -1 || this.isAllowed || this.mode === 'off' || this.headerBuffer.length >= 16384) {
           if (!this.isAllowed && this.mode !== 'off') {
-            const headerStr = this.headerBuffer.slice(0, headerIndex !== -1 ? headerIndex + 4 : undefined).toString('utf-8');
-            const blocked = this.scanner.scan(headerStr, 'network').blocked;
+            // Scan the entire buffered block (headers and any initial body bytes)
+            const fullBufferStr = this.headerBuffer.toString('utf-8');
+            const blocked = this.scanner.scan(fullBufferStr, 'network').blocked;
             if (blocked) {
               if (this.verbose) {
                 this.reporter.warn(`Network leak blocked in HTTP headers: closing connection to ${hostname}`);
@@ -108,8 +135,25 @@ export class TlsInterceptor {
     });
 
     tlsSocket.on('end', () => {
-      if (!this.isAllowed && this.mode !== 'off' && this.requestChunks.length > 0) {
-        this.scanner.scan(Buffer.concat(this.requestChunks).toString('utf-8'), 'network');
+      if (!this.isAllowed && this.mode !== 'off') {
+        if (this.requestChunks.length > 0) {
+          const fullRequest = Buffer.concat(this.requestChunks).toString('utf-8');
+          const blocked = this.scanner.scan(fullRequest, 'network').blocked;
+          if (blocked) {
+            this.safeDestroy(tlsSocket);
+            this.safeDestroy(this.upstreamSocket);
+            return;
+          }
+        }
+        if (!this.headersFlushed && this.headerBuffer.length > 0) {
+          const headerStr = this.headerBuffer.toString('utf-8');
+          const blocked = this.scanner.scan(headerStr, 'network').blocked;
+          if (blocked) {
+            this.safeDestroy(tlsSocket);
+            this.safeDestroy(this.upstreamSocket);
+            return;
+          }
+        }
       }
       if (!this.headersFlushed && this.headerBuffer.length > 0) {
         const up = ensureUpstream();
