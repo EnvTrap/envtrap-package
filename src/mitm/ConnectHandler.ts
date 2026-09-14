@@ -18,6 +18,7 @@ export class ConnectHandler {
     private readonly allowedDomains: Set<string>,
     private readonly mode: string,
     private readonly verbose: boolean,
+    private readonly maxSecretLength = 200,
   ) {}
 
   async handle(
@@ -54,6 +55,7 @@ export class ConnectHandler {
         this.allowedDomains.has(hostname),
         this.mode,
         this.verbose,
+        this.maxSecretLength,
       );
       interceptor.intercept(tlsSocket, hostname, upstreamPort);
     });

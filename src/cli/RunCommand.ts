@@ -89,10 +89,15 @@ export class RunCommand {
     this.caCertPath = materials.certPath;
     injectSystemCA(this.caCertPath, this.options.verbose);
 
+    const maxSecretLength = this.secrets.reduce(
+      (max, s) => Math.max(max, s.value ? s.value.length : 0),
+      200,
+    );
+
     const server = new MitmServer(ca, this.scanner, {
       warn: (m) => this.warnReporter(m),
       info: () => {},
-    }, this.config, this.options.verbose);
+    }, this.config, this.options.verbose, maxSecretLength);
 
     return server.start();
   }
