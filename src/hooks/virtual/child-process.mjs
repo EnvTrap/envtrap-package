@@ -23,6 +23,7 @@ import {
   getCallerFile,
   isPathExcluded,
   loadAndScrubSecretsMap,
+  getSerializedSecretsMap,
 } from '__HOOKS_SHARED_URL__';
 
 export { ChildProcess } from 'node:child_process';
@@ -73,6 +74,19 @@ function checkEnv(env, command) {
 // Wrapped exports
 // ---------------------------------------------------------------------------
 
+function isNodeCommand(cmd) {
+  if (!cmd || typeof cmd !== 'string') return false;
+  return cmd === process.execPath || /(?:^|[/\\])node(?:\.exe)?$/i.test(cmd);
+}
+
+function injectGrandchildEnv(actualOpts, isNode) {
+  if (!isNode) return;
+  const serialized = getSerializedSecretsMap();
+  if (!serialized) return;
+  const currentEnv = actualOpts.env ?? process.env;
+  actualOpts.env = { ...currentEnv, __ENVTRAP_SECRETS_MAP__: serialized };
+}
+
 export function spawn(command, args, options) {
   let actualArgs = args;
   let actualOpts = options;
@@ -83,6 +97,7 @@ export function spawn(command, args, options) {
   actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
   const env = actualOpts.env ?? process.env;
   checkEnv(env, command);
+  injectGrandchildEnv(actualOpts, isNodeCommand(command));
   return _spawn(command, actualArgs ?? [], actualOpts);
 }
 
@@ -131,6 +146,7 @@ export function execFile(file, args, options, callback) {
   actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
   const env = actualOpts.env ?? process.env;
   checkEnv(env, file);
+  injectGrandchildEnv(actualOpts, isNodeCommand(file));
 
   if (typeof actualCb === 'function') {
     return _execFile(file, actualArgs, actualOpts, actualCb);
@@ -148,6 +164,7 @@ export function fork(modulePath, args, options) {
   actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
   const env = actualOpts.env ?? process.env;
   checkEnv(env, modulePath);
+  injectGrandchildEnv(actualOpts, true);
   return _fork(modulePath, actualArgs ?? [], actualOpts);
 }
 
@@ -161,6 +178,7 @@ export function spawnSync(command, args, options) {
   actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
   const env = actualOpts.env ?? process.env;
   checkEnv(env, command);
+  injectGrandchildEnv(actualOpts, isNodeCommand(command));
   return _spawnSync(command, actualArgs ?? [], actualOpts);
 }
 
@@ -181,6 +199,7 @@ export function execFileSync(file, args, options) {
   actualOpts = actualOpts && typeof actualOpts === 'object' ? actualOpts : {};
   const env = actualOpts.env ?? process.env;
   checkEnv(env, file);
+  injectGrandchildEnv(actualOpts, isNodeCommand(file));
   return _execFileSync(file, actualArgs ?? [], actualOpts);
 }
 

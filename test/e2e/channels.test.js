@@ -95,6 +95,20 @@ test('Channel CHILD PROCESS: execFile preserves callbacks and options objects', 
   assert.match(stdout, /RESULT2:OPT_CB_OK:HELLO/);
 });
 
+const GRANDCHILD_APP = path.resolve(__dirname, '../fixtures/grandchild-secrets-leak.js');
+
+test('Channel CHILD PROCESS: grandchild process retains secret interception despite scrubbed env (Issue #14)', async () => {
+  const { stdout, stderr } = await runCli(
+    ['run', '--no-mitm', 'node', GRANDCHILD_APP],
+    { TEST_SECRET_KEY: FAKE_SECRET }
+  );
+
+  // Grandchild stdout must be redacted
+  assert.strictEqual(stdout.includes(FAKE_SECRET), false);
+  assert.match(stderr, /SECRET LEAK DETECTED/);
+  assert.match(stderr, /TEST_SECRET_KEY/);
+});
+
 test('Channel DNS: intercepts and blocks domain query containing secret', async () => {
   const { stdout, stderr } = await runCli(
     ['run', '--no-mitm', 'node', DNS_APP],

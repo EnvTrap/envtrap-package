@@ -72,13 +72,18 @@ test('Hooks Shared - preRedact masks secrets with PATH_EXCLUDED', async () => {
   assert.strictEqual(preRedact(clean, secretsMap), clean);
 });
 
-test('Hooks Shared - loadAndScrubSecretsMap parses and scrubs env var (Issue #14)', async () => {
-  const { loadAndScrubSecretsMap } = await import('../../dist/hooks/shared.mjs');
+test('Hooks Shared - loadAndScrubSecretsMap parses, scrubs env vars, freezes, and preserves prototype safety (Issue #14)', async () => {
+  const { loadAndScrubSecretsMap, getSerializedSecretsMap } = await import('../../dist/hooks/shared.mjs');
 
   const testSecrets = { TEST_API_KEY: 'sk_live_1234567890abcdef' };
   process.env.__ENVTRAP_SECRETS_MAP__ = 'base64:' + Buffer.from(JSON.stringify(testSecrets)).toString('base64');
+  process.env.__ENVTRAP_SECRET_NAMES__ = JSON.stringify(['TEST_API_KEY']);
 
   const parsed = loadAndScrubSecretsMap();
-  assert.deepStrictEqual(parsed, testSecrets);
+  assert.strictEqual(parsed.TEST_API_KEY, testSecrets.TEST_API_KEY);
   assert.strictEqual(process.env.__ENVTRAP_SECRETS_MAP__, undefined);
+  assert.strictEqual(process.env.__ENVTRAP_SECRET_NAMES__, undefined);
+  assert.strictEqual(Object.isFrozen(parsed), true);
+  assert.strictEqual(Object.getPrototypeOf(parsed), null);
+  assert.ok(getSerializedSecretsMap().startsWith('base64:'));
 });
