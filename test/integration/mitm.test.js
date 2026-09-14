@@ -314,6 +314,72 @@ test('MitmServer - CONNECT tunnel and TLS leak interception', async () => {
   }
 });
 
+test('MitmServer - blocks HTTP request closing on EOF without transmitting secret upstream (Issue #6)', async () => {
+  const ca = new CertificateAuthority();
+  const caMaterials = ca.initCA();
+  let blockedOnEof = false;
+
+  const mockScanner = {
+    scan: (content, channel) => {
+      if (content.includes('eof_secret_key_123')) {
+        blockedOnEof = true;
+        return { leaked: true, blocked: true };
+      }
+      return { leaked: false, blocked: false };
+    }
+  };
+
+  const config = {
+    channels: { stdout: 'warn', stderr: 'warn', network: 'block', child_process: 'warn', dns: 'block' },
+    exclusions: { domains: [], paths: [] },
+    entropy: { threshold: 3.5, minLength: 12 },
+    quiet: true,
+    logFile: null
+  };
+
+  const mitm = new MitmServer(ca, mockScanner, { warn: () => {}, info: () => {} }, config, false);
+  const proxyPort = await mitm.start();
+
+  try {
+    await new Promise((resolve, reject) => {
+      const connectReq = http.request({
+        host: '127.0.0.1',
+        port: proxyPort,
+        method: 'CONNECT',
+        path: 'localhost:8443'
+      });
+
+      connectReq.on('connect', (res, socket) => {
+        assert.strictEqual(res.statusCode, 200);
+
+        const tlsSocket = tls.connect({
+          socket: socket,
+          servername: 'localhost',
+          ca: caMaterials.certPem,
+          rejectUnauthorized: true
+        }, () => {
+          // Immediately end the socket with data containing secret
+          tlsSocket.end('GET /?token=eof_secret_key_123 HTTP/1.1\r\nHost: localhost\r\n\r\n');
+        });
+
+        tlsSocket.on('close', () => {
+          assert.strictEqual(blockedOnEof, true);
+          resolve();
+        });
+        tlsSocket.on('error', () => {
+          assert.strictEqual(blockedOnEof, true);
+          resolve();
+        });
+      });
+
+      connectReq.on('error', reject);
+      connectReq.end();
+    });
+  } finally {
+    await mitm.stop();
+  }
+});
+
 // Helper function to issue requests through the loopback proxy
 function makeProxyRequest(proxyPort, targetPort, method, path, headers = {}, body = '') {
   const options = {

@@ -69,6 +69,62 @@ test('SecretMatcher - findIn operations', () => {
   assert.strictEqual(matcher2.findIn('text containing short key').length, 0);
 });
 
+test('SecretMatcher - detects encoded secrets (Base64, Hex, URL-encoded, JSON-escaped) (Issue #5)', () => {
+  const secret = { name: 'API_TOKEN', value: 'SuperSecretToken12345!', source: 'env' };
+  const matcher = new SecretMatcher([secret], ENTROPY_CFG);
+
+  // Verbatim
+  assert.strictEqual(matcher.findIn('payload: SuperSecretToken12345!').length, 1);
+
+  // Standard Base64
+  const b64 = Buffer.from('SuperSecretToken12345!').toString('base64');
+  const b64Matches = matcher.findIn(`Authorization: Basic ${b64}`);
+  assert.strictEqual(b64Matches.length, 1);
+  assert.strictEqual(b64Matches[0].name, 'API_TOKEN');
+
+  // Hex encoded
+  const hex = Buffer.from('SuperSecretToken12345!').toString('hex');
+  const hexMatches = matcher.findIn(`data: ${hex}`);
+  assert.strictEqual(hexMatches.length, 1);
+  assert.strictEqual(hexMatches[0].name, 'API_TOKEN');
+
+  // URL encoded
+  const urlEnc = encodeURIComponent('SuperSecretToken12345!');
+  const urlMatches = matcher.findIn(`https://example.com/api?token=${urlEnc}`);
+  assert.strictEqual(urlMatches.length, 1);
+  assert.strictEqual(urlMatches[0].name, 'API_TOKEN');
+
+  // URL encoded with lowercase hex escapes (Issue #5 edge case)
+  const lowerUrlEnc = urlEnc.replace(/%[0-9A-Fa-f]{2}/g, (m) => m.toLowerCase());
+  const lowerUrlMatches = matcher.findIn(`https://example.com/api?token=${lowerUrlEnc}`);
+  assert.strictEqual(lowerUrlMatches.length, 1);
+  assert.strictEqual(lowerUrlMatches[0].name, 'API_TOKEN');
+
+  // Unpadded standard Base64 (Issue #5 edge case)
+  const secretNeedsPad = { name: 'PADDED_SECRET', value: '1234567890abc', source: 'env' }; // length 13 -> b64 has '==' padding
+  const matcherPad = new SecretMatcher([secretNeedsPad], ENTROPY_CFG);
+  const unpaddedB64 = Buffer.from('1234567890abc').toString('base64').replace(/=+$/, '');
+  const padMatches = matcherPad.findIn(`raw: ${unpaddedB64}`);
+  assert.strictEqual(padMatches.length, 1);
+  assert.strictEqual(padMatches[0].name, 'PADDED_SECRET');
+
+  // JSON escaped secret
+  const secretWithSpecial = { name: 'SPECIAL_SECRET', value: 'secret"with\\special\nchars', source: 'env' };
+  const matcherSpecial = new SecretMatcher([secretWithSpecial], { minLength: 6, threshold: 2.0 });
+  const jsonEscaped = JSON.stringify('secret"with\\special\nchars').slice(1, -1);
+  const jsonMatches = matcherSpecial.findIn(`{"data":"${jsonEscaped}"}`);
+  assert.strictEqual(jsonMatches.length, 1);
+  assert.strictEqual(jsonMatches[0].name, 'SPECIAL_SECRET');
+
+  // JSON escaped forward slashes (e.g. PHP/Rails\/Go serializers) (Issue #5 edge case)
+  const secretWithSlash = { name: 'SLASH_TOKEN', value: 'ghp_abc/def+123456789', source: 'env' };
+  const matcherSlash = new SecretMatcher([secretWithSlash], ENTROPY_CFG);
+  const slashedJson = 'ghp_abc\\/def+123456789';
+  const slashMatches = matcherSlash.findIn(`{"token":"${slashedJson}"}`);
+  assert.strictEqual(slashMatches.length, 1);
+  assert.strictEqual(slashMatches[0].name, 'SLASH_TOKEN');
+});
+
 test('SecretMatcher - findMatchingKeys environment mapping', () => {
   const secret1 = { name: 'DB_PASS', value: 'pass123456789', source: 'env' };
   const secret2 = { name: 'API_KEY', value: 'key1234567890', source: 'env' };

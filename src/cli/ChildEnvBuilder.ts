@@ -38,7 +38,7 @@ export class ChildEnvBuilder {
         : {}),
       ...(mitmEnabled && caCertPath ? { NODE_EXTRA_CA_CERTS: caCertPath } : {}),
       NODE_OPTIONS:                    this.buildNodeOptions(hooksPath, process.env.NODE_OPTIONS),
-      __ENVTRAP_SECRETS_MAP__:         JSON.stringify(secretsMap),
+      __ENVTRAP_SECRETS_MAP__:         `base64:${Buffer.from(JSON.stringify(secretsMap)).toString('base64')}`,
       __ENVTRAP_SECRET_NAMES__:        JSON.stringify(secrets.map((s) => s.name)),
       __ENVTRAP_CONFIG_MODES__:        JSON.stringify(config.channels),
       __ENVTRAP_PATH_EXCLUSIONS__:     JSON.stringify(config.exclusions.paths),

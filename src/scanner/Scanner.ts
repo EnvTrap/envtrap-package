@@ -92,6 +92,14 @@ export class Scanner implements IScanner {
     return { leaked: true, blocked: mode === 'block' };
   }
 
+  checkChildArgs(secret: Secret, command: string): ScanResult {
+    const mode = this.config.channels.child_process ?? 'warn';
+    if (mode === 'off') return none();
+
+    this.log.record(secret, 'child_process', `secret "${secret.name}" passed in arguments to: ${command}`);
+    return { leaked: true, blocked: mode === 'block' };
+  }
+
   getEvents(): readonly LeakEvent[] { return this.log.getAll(); }
 }
 

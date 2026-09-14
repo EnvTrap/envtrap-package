@@ -71,6 +71,21 @@ test('Channel CHILD PROCESS: alerts on subprocess spawn with omitted options.env
   assert.match(stderr, /TEST_SECRET_KEY/);
 });
 
+const SUBPROCESS_ARGS_APP = path.resolve(__dirname, '../fixtures/subprocess-args-leak.js');
+
+test('Channel CHILD PROCESS: alerts on secret passed in command line arguments (Issue #3)', async () => {
+  const { stderr } = await runCli(
+    ['run', '--no-mitm', 'node', SUBPROCESS_ARGS_APP],
+    { TEST_SECRET_KEY: FAKE_SECRET }
+  );
+
+  assert.match(stderr, /SECRET LEAK DETECTED/);
+  assert.match(stderr, /Channel:\s+CHILD PROC/);
+  assert.match(stderr, /TEST_SECRET_KEY/);
+  // Verify plaintext secret was redacted and not printed to stderr
+  assert.strictEqual(stderr.includes(FAKE_SECRET), false);
+});
+
 const SUBPROCESS_EXECFILE_APP = path.resolve(__dirname, '../fixtures/subprocess-execfile.js');
 
 test('Channel CHILD PROCESS: alerts on ESM subprocess spawn with omitted options.env', async () => {
@@ -93,6 +108,20 @@ test('Channel CHILD PROCESS: execFile preserves callbacks and options objects', 
 
   assert.match(stdout, /RESULT1:ARG_CB_OK/);
   assert.match(stdout, /RESULT2:OPT_CB_OK:HELLO/);
+});
+
+const GRANDCHILD_APP = path.resolve(__dirname, '../fixtures/grandchild-secrets-leak.js');
+
+test('Channel CHILD PROCESS: grandchild process retains secret interception despite scrubbed env (Issue #14)', async () => {
+  const { stdout, stderr } = await runCli(
+    ['run', '--no-mitm', 'node', GRANDCHILD_APP],
+    { TEST_SECRET_KEY: FAKE_SECRET }
+  );
+
+  // Grandchild stdout must be redacted
+  assert.strictEqual(stdout.includes(FAKE_SECRET), false);
+  assert.match(stderr, /SECRET LEAK DETECTED/);
+  assert.match(stderr, /TEST_SECRET_KEY/);
 });
 
 test('Channel DNS: intercepts and blocks domain query containing secret', async () => {
