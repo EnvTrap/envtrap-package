@@ -24,7 +24,7 @@ export class TlsInterceptor {
     private readonly verbose: boolean,
     maxSecretLength = 200,
   ) {
-    this.overlapSize = Math.max(200, maxSecretLength);
+    this.overlapSize = Math.min(8192, Math.max(200, maxSecretLength));
   }
 
   intercept(
