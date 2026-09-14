@@ -49,6 +49,18 @@ export class StdioHandler {
   private handleStderrLine(line: string, onBlock: () => void): boolean {
     const parsed = this.parser.parse(line);
 
+    if (parsed.type === 'child_process_args_leak') {
+      const found = this.secrets.find((s) => s.name === parsed.secretName);
+      if (found) {
+        const result = this.scanner.checkChildArgs(found, parsed.detail ?? '');
+        if (result.blocked) {
+          onBlock();
+          return true;
+        }
+      }
+      return false;
+    }
+
     if (parsed.type === 'child_process_leak') {
       const found = this.secrets.find((s) => s.name === parsed.secretName);
       if (found) {

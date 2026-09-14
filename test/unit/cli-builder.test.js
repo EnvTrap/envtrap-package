@@ -82,6 +82,11 @@ test('HookMessageParser - parses child process leak protocols', () => {
   assert.strictEqual(msg.type, 'child_process_leak');
   assert.strictEqual(msg.secretName, 'MY_TOKEN');
   assert.strictEqual(msg.detail, '/bin/bash');
+
+  const msgArgs = parser.parse('[envtrap] Child process leak: secret "MY_TOKEN" passed in arguments to: curl -H "Auth: [REDACTED]"');
+  assert.strictEqual(msgArgs.type, 'child_process_args_leak');
+  assert.strictEqual(msgArgs.secretName, 'MY_TOKEN');
+  assert.strictEqual(msgArgs.detail, 'curl -H "Auth: [REDACTED]"');
 });
 
 test('HookMessageParser - parses DNS leak and warning protocols', () => {
