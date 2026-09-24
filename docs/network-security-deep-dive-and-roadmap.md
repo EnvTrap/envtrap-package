@@ -118,36 +118,28 @@ EnvTrap operates as an **In-Memory Man-In-The-Middle (MITM) TLS Proxy**. Here is
 
 ## 4. Current Flaws & Bottlenecks in EnvTrap's Network Code
 
-A thorough audit of our MITM proxy code revealed five significant issues:
+A thorough audit of our MITM proxy code revealed five significant areas of security focus:
 
-### Flaw 1: Hardcoded 1MB Buffer Clamp (Issue #44)
-In `TlsInterceptor.ts`, we cap accumulated buffers to `MAX_BUFFER_BYTES = 1_048_576` (1MB). If a file upload, big GraphQL mutation, or batch database query exceeds 1MB, subsequent chunks pass through uninspected.
+### Status of Prior Vulnerabilities & Fixes
 
-### Flaw 2: Hardcoded 200-Byte Packet Split Window (Issue #50)
-In `TlsInterceptor.ts`, we keep `lastOverlap = combined.slice(-200)`. If a long secret (e.g. an RSA private key or 500-character AWS session token) is split across TCP packets, slicing only 200 bytes misses the secret.
+* **Issue #6 (Early Chunk Gating) — RESOLVED**: 
+  In earlier versions, the proxy immediately forwarded incoming chunks upstream as they arrived, meaning a secret located in early HTTP headers could leak before the full header block finished arriving. `TlsInterceptor` now gates incoming chunks into `headerBuffer` until the `\r\n\r\n` boundary is validated, while sniffing protocol prefixes to allow non-HTTP raw TLS protocols (Postgres, Redis) through without deadlocks.
 
-### Flaw 3: Plain HTTP Body Buffering in `HttpHandler.ts` (Issue #61)
-In `HttpHandler.ts`, unencrypted HTTP request bodies are accumulated entirely into an array (`bodyChunks`) before forwarding. For streaming uploads or Server-Sent Events, this breaks streaming semantics and buffers everything into memory.
-
-### Flaw 4: Strict Exact Match in `exclusions.domains` (Issue #54)
-In `ConnectHandler.ts`, domain allowlisting is checked using `this.allowedDomains.has(hostname)`. If you allow `api.stripe.com`, requests to `sub.api.stripe.com` or `files.stripe.com` are not allowed, requiring exhaustive manual enumeration.
-
-### Flaw 5: Native `fetch` Bypass in Node 18+ (Undici)
-Modern Node.js versions use Undici for `fetch()`. While EnvTrap sets `HTTP_PROXY` and `HTTPS_PROXY`, certain custom HTTP clients (like Axios with custom adapters or direct `net.connect`) bypass proxy environment variables unless patched at the module level.
+* **Issue #50 (Dynamic Sliding Window Overlap) — RESOLVED**:
+  In earlier versions, the overlap window between consecutive TCP chunks was hardcoded to 200 bytes. `TlsInterceptor` now dynamically scales the overlap window between 200 and 8,192 bytes based on `maxSecretLength` passed from `RunCommand`, guaranteeing that long secrets (e.g. RSA private keys, 500-char tokens) split across TCP frames are always caught.
 
 ---
 
-## 5. Technical Roadmap: How We Are Upgrading the Network Channel
+## 5. Ongoing Hardening & Future Roadmap
 
 ```
                         Decrypted Stream Chunk
                                    |
                                    v
             +---------------------------------------------+
-            | Step 1: Dynamic Sliding Window              |
-            | Calculate window size = max(secret.length). |
-            | Guarantees long tokens split across TCP     |
-            | packets are never missed.                   |
+            | Step 1: Dynamic Sliding Window (DONE #50)   |
+            | Window size = max(secret.length) (200-8192) |
+            | Catches split secrets across packet edges.  |
             +---------------------------------------------+
                                    |
                                    v
@@ -184,13 +176,11 @@ Modern Node.js versions use Undici for `fetch()`. While EnvTrap sets `HTTP_PROXY
   "channels": {
     "network": "block"
   },
-  "network": {
-    "maxPayloadBytes": 5242880,
-    "bypassLoopback": true,
-    "exclusions": {
-      "domains": ["*.stripe.com", "api.github.com"],
-      "subnets": ["10.0.0.0/8", "192.168.1.0/24"]
-    }
+  "exclusions": {
+    "domains": [
+      "api.stripe.com",
+      "api.github.com"
+    ]
   }
 }
 ```
@@ -199,10 +189,10 @@ Modern Node.js versions use Undici for `fetch()`. While EnvTrap sets `HTTP_PROXY
 
 ## 7. Summary Table
 
-| Problem | How It Works Now | What Was Wrong | How We Are Fixing It |
-|:---|:---|:---|:---|
-| **Encrypted HTTPS** | Ephemeral MITM Proxy | Only catches traffic honoring `HTTP_PROXY` | Add Undici global dispatcher hook for `fetch` |
-| **Buffer Overflow** | Hardcoded 1MB limit | Payloads >1MB pass uninspected | Configurable `maxPayloadBytes` (Issue #44) |
-| **Packet Splits** | Fixed 200-byte slice | Keys >200 bytes split across packets escape | Dynamic window matching max secret length (Issue #50) |
-| **Domain Matches** | `Set.has(hostname)` | Wildcards like `*.aws.com` not supported | Wildcard and CIDR matching engine (Issue #54) |
-| **CA Validity** | 10 years / 1 year | Violates strict enterprise compliance | Configurable certificate expiration times (Issue #51) |\n
+| Capability | How It Works | Security Guarantee |
+|:---|:---|:---|
+| **Encrypted HTTPS** | Ephemeral In-Memory Root CA + Loopback Proxy | Decrypts and audits outbound TLS traffic before transmission |
+| **Early Chunk Gating** | Buffers until `\r\n\r\n` is matched and scanned | Prevents fragmented HTTP headers from leaking upstream (Issue #6) |
+| **Packet Split Overlap** | Dynamic sliding window (`Math.min(8192, Math.max(200, maxSecretLength))`) | Prevents split secrets from slipping between TCP chunks (Issue #50) |
+| **Protocol Deadlock Defense** | HTTP verb prefix sniffing (`GET`, `POST`, etc.) | Prevents non-HTTP raw TLS protocols (Postgres, Redis) from stalling |
+| **CA Material Security** | 2048-bit RSA keys generated in RAM | Private keys never touch disk; temporary files wiped on exit |\n
